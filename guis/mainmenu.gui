@@ -15901,12 +15901,12 @@ windowDef Desktop
 			visible	0
 			windowDef help_text
 			{
-				rect	114,80,432,195
+				rect	0,38,640,169
 				visible	0
 				backcolor	1,1,1,1
-				forecolor	0,0,0,0.474
-				text	"This is a helpful message"
-				textscale	1
+				forecolor	0,0,0,1
+				text	"Kill enemies for gold \nBuy weapons in shop \nWeapons can be fused \nYou can manually fire primary weapons \nSecondary weapons fire automatically"
+				textscale	0.5
 				font	"fonts/marine"
 			}
 			windowDef help_b1
