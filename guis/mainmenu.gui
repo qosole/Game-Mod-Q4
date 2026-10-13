@@ -19065,6 +19065,7 @@ windowDef Desktop
 			set "main_b_loadgame::visible" "1" ;
 			set "main_b_settings::visible" "1" ;
 			set "main_b_exit::visible" "1" ;
+			set "main_b_help::visible" "1" ;
 		}
 
 		onNamedEvent hideMain {
@@ -19081,6 +19082,7 @@ windowDef Desktop
 			set "main_b_loadgame::visible" "0" ;
 			set "main_b_settings::visible" "0" ;
 			set "main_b_exit::visible" "0" ;
+			set "main_b_help::visible" "0" ;
 		}
 
 		onNamedEvent showSet {
