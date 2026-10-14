@@ -1,0 +1,1047 @@
+windowDef Desktop
+{
+	rect	0,0,640,480
+	backcolor	0.93,0.93,0.9,0.97
+	visible	1
+	menugui	1
+	definevec4	"c_text"	0,0,0,1
+	definevec4	"c_held"	0.55,0.55,0.55,1
+	definevec4	"c_good"	0,0.55,0,1
+	definevec4	"c_bad"	0.85,0,0,1
+	definevec4	"c_empty"	1,1,1,1
+	definevec4	"c_fire"	1,0.6,0.5,1
+	definevec4	"c_water"	0.6,0.8,1,1
+	definevec4	"c_earth"	0.78,0.66,0.45,1
+	definevec4	"c_steam"	0.87,0.87,0.93,1
+	definevec4	"c_magma"	1,0.72,0.25,1
+	definevec4	"c_mud"	0.62,0.52,0.38,1
+	definevec4	"c_next"	0.6,0.9,0.6,1
+	definevec4	"c_cost"	0,0.494,0,1
+	definevec4	"c_nexthover"	0.75,1,0.75,1
+
+	onNamedEvent shopOpen {
+		set "gui::hover" "0" ;
+		set "shop_fire_gun_hl::visible" "0" ;
+		set "shop_water_gun_hl::visible" "0" ;
+		set "shop_earth_gun_hl::visible" "0" ;
+		set "p0_hl::visible" "0" ;
+		set "p1_hl::visible" "0" ;
+		set "p2_hl::visible" "0" ;
+		set "p3_hl::visible" "0" ;
+		set "p4_hl::visible" "0" ;
+		set "p5_hl::visible" "0" ;
+		set "p6_hl::visible" "0" ;
+		set "p7_hl::visible" "0" ;
+		set "p8_hl::visible" "0" ;
+		set "p9_hl::visible" "0" ;
+		set "next_box::backcolor" "$desktop::c_next" ;
+		set "shop_msg::forecolor" "$desktop::c_text" ;
+	}
+
+	onNamedEvent shopUpdate {
+		if ( "gui::status_fire_gun" == 3 ) {
+			set "gun_cost::forecolor" "$desktop::c_bad" ;
+		} else {
+			set "gun_cost::forecolor" "$desktop::c_cost" ;
+		}
+		if ( "gui::place0_type" == 0 ) {
+			set "p0_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place0_type" == 1 ) {
+			set "p0_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place0_type" == 2 ) {
+			set "p0_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place0_type" == 3 ) {
+			set "p0_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place0_type" == 4 ) {
+			set "p0_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place0_type" == 5 ) {
+			set "p0_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place0_type" == 6 ) {
+			set "p0_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place0_held" == 1 ) {
+			set "p0_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p0_text::forecolor" "$desktop::c_text" ;
+		}
+		if ( "gui::place1_type" == 0 ) {
+			set "p1_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place1_type" == 1 ) {
+			set "p1_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place1_type" == 2 ) {
+			set "p1_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place1_type" == 3 ) {
+			set "p1_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place1_type" == 4 ) {
+			set "p1_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place1_type" == 5 ) {
+			set "p1_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place1_type" == 6 ) {
+			set "p1_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place1_held" == 1 ) {
+			set "p1_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p1_text::forecolor" "$desktop::c_text" ;
+		}
+		if ( "gui::place2_type" == 0 ) {
+			set "p2_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place2_type" == 1 ) {
+			set "p2_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place2_type" == 2 ) {
+			set "p2_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place2_type" == 3 ) {
+			set "p2_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place2_type" == 4 ) {
+			set "p2_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place2_type" == 5 ) {
+			set "p2_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place2_type" == 6 ) {
+			set "p2_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place2_held" == 1 ) {
+			set "p2_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p2_text::forecolor" "$desktop::c_text" ;
+		}
+		if ( "gui::place3_type" == 0 ) {
+			set "p3_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place3_type" == 1 ) {
+			set "p3_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place3_type" == 2 ) {
+			set "p3_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place3_type" == 3 ) {
+			set "p3_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place3_type" == 4 ) {
+			set "p3_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place3_type" == 5 ) {
+			set "p3_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place3_type" == 6 ) {
+			set "p3_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place3_held" == 1 ) {
+			set "p3_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p3_text::forecolor" "$desktop::c_text" ;
+		}
+		if ( "gui::place4_type" == 0 ) {
+			set "p4_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place4_type" == 1 ) {
+			set "p4_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place4_type" == 2 ) {
+			set "p4_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place4_type" == 3 ) {
+			set "p4_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place4_type" == 4 ) {
+			set "p4_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place4_type" == 5 ) {
+			set "p4_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place4_type" == 6 ) {
+			set "p4_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place4_held" == 1 ) {
+			set "p4_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p4_text::forecolor" "$desktop::c_text" ;
+		}
+		if ( "gui::place5_type" == 0 ) {
+			set "p5_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place5_type" == 1 ) {
+			set "p5_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place5_type" == 2 ) {
+			set "p5_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place5_type" == 3 ) {
+			set "p5_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place5_type" == 4 ) {
+			set "p5_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place5_type" == 5 ) {
+			set "p5_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place5_type" == 6 ) {
+			set "p5_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place5_held" == 1 ) {
+			set "p5_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p5_text::forecolor" "$desktop::c_text" ;
+		}
+		if ( "gui::place6_type" == 0 ) {
+			set "p6_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place6_type" == 1 ) {
+			set "p6_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place6_type" == 2 ) {
+			set "p6_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place6_type" == 3 ) {
+			set "p6_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place6_type" == 4 ) {
+			set "p6_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place6_type" == 5 ) {
+			set "p6_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place6_type" == 6 ) {
+			set "p6_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place6_held" == 1 ) {
+			set "p6_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p6_text::forecolor" "$desktop::c_text" ;
+		}
+		if ( "gui::place7_type" == 0 ) {
+			set "p7_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place7_type" == 1 ) {
+			set "p7_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place7_type" == 2 ) {
+			set "p7_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place7_type" == 3 ) {
+			set "p7_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place7_type" == 4 ) {
+			set "p7_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place7_type" == 5 ) {
+			set "p7_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place7_type" == 6 ) {
+			set "p7_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place7_held" == 1 ) {
+			set "p7_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p7_text::forecolor" "$desktop::c_text" ;
+		}
+		if ( "gui::place8_type" == 0 ) {
+			set "p8_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place8_type" == 1 ) {
+			set "p8_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place8_type" == 2 ) {
+			set "p8_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place8_type" == 3 ) {
+			set "p8_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place8_type" == 4 ) {
+			set "p8_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place8_type" == 5 ) {
+			set "p8_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place8_type" == 6 ) {
+			set "p8_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place8_held" == 1 ) {
+			set "p8_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p8_text::forecolor" "$desktop::c_text" ;
+		}
+		if ( "gui::place9_type" == 0 ) {
+			set "p9_box::backcolor" "$desktop::c_empty" ;
+		} else if ( "gui::place9_type" == 1 ) {
+			set "p9_box::backcolor" "$desktop::c_fire" ;
+		} else if ( "gui::place9_type" == 2 ) {
+			set "p9_box::backcolor" "$desktop::c_water" ;
+		} else if ( "gui::place9_type" == 3 ) {
+			set "p9_box::backcolor" "$desktop::c_earth" ;
+		} else if ( "gui::place9_type" == 4 ) {
+			set "p9_box::backcolor" "$desktop::c_steam" ;
+		} else if ( "gui::place9_type" == 5 ) {
+			set "p9_box::backcolor" "$desktop::c_magma" ;
+		} else if ( "gui::place9_type" == 6 ) {
+			set "p9_box::backcolor" "$desktop::c_mud" ;
+		}
+		if ( "gui::place9_held" == 1 ) {
+			set "p9_text::forecolor" "$desktop::c_held" ;
+		} else {
+			set "p9_text::forecolor" "$desktop::c_text" ;
+		}
+	}
+
+	onNamedEvent buyOk {
+		transition "shop_msg::forecolor" "$desktop::c_good" "$desktop::c_text" "1000" ;
+	}
+
+	onNamedEvent buyFailed {
+		transition "shop_msg::forecolor" "$desktop::c_bad" "$desktop::c_text" "1000" ;
+	}
+
+	windowDef shop_box
+	{
+		rect	4,6,629,108
+		backcolor	0,0,0,0
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef shop_label
+	{
+		rect	17,14,60,16
+		forecolor	0,0,0,1
+		text	"SHOP"
+		textscale	0.25
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef shop_title
+	{
+		rect	80,15,300,16
+		forecolor	0.4,0.4,0.4,1
+		text	"gui::shop_title"
+		textscale	0.2
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef money_label
+	{
+		rect	430,14,84,16
+		forecolor	0,0,0,1
+		text	"money:"
+		textscale	0.25
+		textalign	2
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef money_value
+	{
+		rect	518,14,108,16
+		forecolor	0,0.5,0,1
+		text	"gui::shop_cash"
+		textscale	0.25
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef shop_hint
+	{
+		rect	17,40,400,14
+		forecolor	0.4,0.4,0.4,1
+		text	"CURRENT GUN COST:"
+		textscale	0.18
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef shop_fire_gun_hl
+	{
+		rect	52,66,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef shop_fire_gun_box
+	{
+		rect	55,69,142,37
+		backcolor	1,0.6,0.5,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef shop_fire_gun_name
+	{
+		rect	59,79,134,16
+		forecolor	0,0,0,1
+		text	"Fire gun"
+		textscale	0.24
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef shop_water_gun_hl
+	{
+		rect	245,66,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef shop_water_gun_box
+	{
+		rect	248,69,142,37
+		backcolor	0.6,0.8,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef shop_water_gun_name
+	{
+		rect	252,79,134,16
+		forecolor	0,0,0,1
+		text	"Water gun"
+		textscale	0.24
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef shop_earth_gun_hl
+	{
+		rect	438,66,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef shop_earth_gun_box
+	{
+		rect	441,69,142,37
+		backcolor	0.78,0.66,0.45,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef shop_earth_gun_name
+	{
+		rect	445,79,134,16
+		forecolor	0,0,0,1
+		text	"Earth gun"
+		textscale	0.24
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef primary_label
+	{
+		rect	27,216,124,16
+		forecolor	0,0,0,1
+		text	"PRIMARY SLOT"
+		textscale	0.25
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef primary_hint
+	{
+		rect	150,219,270,14
+		forecolor	0.4,0.4,0.4,1
+		text	"(you shoot this one, it hits harder)"
+		textscale	0.18
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef secondary_label
+	{
+		rect	32,339,140,16
+		forecolor	0,0,0,1
+		text	"SECONDARY SLOTS"
+		textscale	0.25
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef secondary_hint
+	{
+		rect	175,341,245,14
+		forecolor	0.4,0.4,0.4,1
+		text	"(these shoot by themselves but weaker)"
+		textscale	0.18
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef list_label
+	{
+		rect	441,124,142,16
+		forecolor	0,0,0,1
+		text	"INVENTORY"
+		textscale	0.25
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef list_box
+	{
+		rect	437,142,150,205
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p0_hl
+	{
+		rect	23,241,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p0_box
+	{
+		rect	26,244,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p0_text
+	{
+		rect	30,254,134,18
+		forecolor	0,0,0,1
+		text	"gui::place0_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef p1_hl
+	{
+		rect	13,363,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p1_box
+	{
+		rect	16,366,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p1_text
+	{
+		rect	20,376,134,18
+		forecolor	0,0,0,1
+		text	"gui::place1_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef p2_hl
+	{
+		rect	167,363,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p2_box
+	{
+		rect	170,366,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p2_text
+	{
+		rect	174,376,134,18
+		forecolor	0,0,0,1
+		text	"gui::place2_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef p3_hl
+	{
+		rect	321,363,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p3_box
+	{
+		rect	324,366,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p3_text
+	{
+		rect	328,376,134,18
+		forecolor	0,0,0,1
+		text	"gui::place3_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef p4_hl
+	{
+		rect	475,363,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p4_box
+	{
+		rect	478,366,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p4_text
+	{
+		rect	482,376,134,18
+		forecolor	0,0,0,1
+		text	"gui::place4_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef p5_hl
+	{
+		rect	438,143,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p5_box
+	{
+		rect	441,146,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p5_text
+	{
+		rect	445,156,134,18
+		forecolor	0,0,0,1
+		text	"gui::place5_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef p6_hl
+	{
+		rect	438,183,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p6_box
+	{
+		rect	441,186,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p6_text
+	{
+		rect	445,196,134,18
+		forecolor	0,0,0,1
+		text	"gui::place6_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef p7_hl
+	{
+		rect	438,223,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p7_box
+	{
+		rect	441,226,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p7_text
+	{
+		rect	445,236,134,18
+		forecolor	0,0,0,1
+		text	"gui::place7_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef p8_hl
+	{
+		rect	438,263,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p8_box
+	{
+		rect	441,266,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p8_text
+	{
+		rect	445,276,134,18
+		forecolor	0,0,0,1
+		text	"gui::place8_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef p9_hl
+	{
+		rect	438,303,148,43
+		backcolor	1,0.85,0,1
+		visible	0
+		noevents	1
+	}
+	windowDef p9_box
+	{
+		rect	441,306,142,37
+		backcolor	1,1,1,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef p9_text
+	{
+		rect	445,316,134,18
+		forecolor	0,0,0,1
+		text	"gui::place9_name"
+		textscale	0.25
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef merge_tip
+	{
+		rect	56,429,290,30
+		forecolor	0.3,0.3,0.3,1
+		text	"TIP: drag a gun onto the same gun to level it up, or onto a different element to make a combo gun!"
+		textscale	0.18
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef shop_msg
+	{
+		rect	250,290,170,45
+		forecolor	0,0,0,1
+		text	"gui::shop_message"
+		textscale	0.2
+		textalign	0
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef next_box
+	{
+		rect	500,428,130,34
+		backcolor	0.6,0.9,0.6,1
+		bordersize	2
+		bordercolor	0,0,0,1
+		visible	1
+		noevents	1
+	}
+	windowDef next_text
+	{
+		rect	504,438,122,16
+		forecolor	0,0,0,1
+		text	"gui::shop_next"
+		textscale	0.2
+		textalign	1
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+	windowDef shop_fire_gun_hit
+	{
+		rect	55,69,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "101" ;
+			set "shop_fire_gun_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "shop_fire_gun_hl::visible" "0" ;
+		}
+
+	}
+	windowDef shop_water_gun_hit
+	{
+		rect	248,69,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "102" ;
+			set "shop_water_gun_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "shop_water_gun_hl::visible" "0" ;
+		}
+
+	}
+	windowDef shop_earth_gun_hit
+	{
+		rect	441,69,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "103" ;
+			set "shop_earth_gun_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "shop_earth_gun_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p0_hit
+	{
+		rect	26,244,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "1" ;
+			set "p0_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p0_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p1_hit
+	{
+		rect	16,366,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "2" ;
+			set "p1_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p1_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p2_hit
+	{
+		rect	170,366,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "3" ;
+			set "p2_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p2_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p3_hit
+	{
+		rect	324,366,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "4" ;
+			set "p3_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p3_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p4_hit
+	{
+		rect	478,366,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "5" ;
+			set "p4_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p4_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p5_hit
+	{
+		rect	441,146,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "6" ;
+			set "p5_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p5_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p6_hit
+	{
+		rect	441,186,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "7" ;
+			set "p6_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p6_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p7_hit
+	{
+		rect	441,226,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "8" ;
+			set "p7_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p7_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p8_hit
+	{
+		rect	441,266,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "9" ;
+			set "p8_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p8_hl::visible" "0" ;
+		}
+
+	}
+	windowDef p9_hit
+	{
+		rect	441,306,142,37
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "gui::hover" "10" ;
+			set "p9_hl::visible" "1" ;
+		}
+
+		onMouseExit {
+			set "gui::hover" "0" ;
+			set "p9_hl::visible" "0" ;
+		}
+
+	}
+	windowDef next_hit
+	{
+		rect	500,428,130,34
+		backcolor	0,0,0,0
+		visible	1
+
+		onMouseEnter {
+			set "next_box::backcolor" "$desktop::c_nexthover" ;
+		}
+
+		onMouseExit {
+			set "next_box::backcolor" "$desktop::c_next" ;
+		}
+
+		onAction {
+			set "cmd" "shopClose" ;
+		}
+
+	}
+	windowDef drag_box
+	{
+		rect	"gui::drag_x" + 10,"gui::drag_y" + 12,96,18
+		backcolor	1,1,0.75,1
+		bordersize	1
+		bordercolor	0,0,0,1
+		visible	"gui::drag_active"
+		noevents	1
+	}
+	windowDef drag_text
+	{
+		rect	"gui::drag_x" + 12,"gui::drag_y" + 15,92,14
+		forecolor	0,0,0,1
+		text	"gui::drag_name"
+		textscale	0.17
+		textalign	1
+		font	"fonts/marine"
+		visible	"gui::drag_active"
+		noevents	1
+	}
+	windowDef gun_cost
+	{
+		rect	135,38,108,16
+		forecolor	0,0.494,0,1
+		text	"gui::gun_cost"
+		textscale	0.25
+		font	"fonts/marine"
+		visible	1
+		noevents	1
+	}
+}
