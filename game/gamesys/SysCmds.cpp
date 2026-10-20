@@ -3233,6 +3233,13 @@ void idGameLocal::InitConsoleCommands( void ) {
 	cmdSystem->AddCommand( "buy",					Cmd_BuyItem_f,				CMD_FL_GAME,				"Buy an item (if in a buy zone and the game type supports it)" );
 // RITUAL END
 
+// WAVESHOP BEGIN
+	cmdSystem->AddCommand( "wave_shop",				Cmd_WaveShop_f,				CMD_FL_GAME, "open the wave shop now (testing)");
+	cmdSystem->AddCommand( "wave_killall",			Cmd_WaveKillAll_f,			CMD_FL_GAME, "remove every wave enemy (testing)");
+	cmdSystem->AddCommand( "wave_next",				Cmd_WaveNext_f,				CMD_FL_GAME, "start the next wave now (testing)");
+	cmdSystem->AddCommand( "wave_status",			Cmd_WaveStatus_f,			CMD_FL_GAME, "print the wave manager state");
+// WAVESHOP END
+
 }
 
 /*
