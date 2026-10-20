@@ -1,0 +1,7 @@
+// Prices for the shop 
+
+entityDef shop_prices
+{
+	"gun_cost_start"	"300"
+	"gun_cost_step"		"50"
+}
