@@ -6031,6 +6031,14 @@ idPlayer::ActiveGui
 ===============
 */
 idUserInterface *idPlayer::ActiveGui( void ) {
+// WAVESHOP BEGIN
+	// Returning the shop here makes Think() route mouse movement to it
+	// (RouteGuiMouse) and UpdateWeapon() turn the fire button into clicks
+	// (Weapon_GUI).
+	if ( waveManager.IsShopOpen() ) {
+		return waveManager.GetShopGui();
+	}
+// WAVESHOP END
 #ifdef _XENON
 	if ( objectiveSystemOpen ) {
 		return 0;
@@ -6275,6 +6283,12 @@ void idPlayer::Weapon_GUI( void ) {
 				focusEnt->UpdateVisuals();
 			}
 		}
+// WAVESHOP BEGIN
+		// tell the shop the fire button went down or up, for dragging weapons around
+		if ( waveManager.IsShopOpen() && ui == waveManager.GetShopGui() ) {
+			waveManager.ShopMouseButton( ( usercmd.buttons & BUTTON_ATTACK ) != 0 );
+		}
+// WAVESHOP END
 		if ( gameLocal.isClient ) {
 			// we predict enough, but don't want to execute commands
 			return;
@@ -6491,6 +6505,13 @@ bool idPlayer::HandleSingleGuiCommand( idEntity *entityGui, idLexer *src ) {
 		return false;
 	}
 
+// WAVESHOP BEGIN
+	// "shopClose" from the Continue button in guis/shop.gui (buying goes through ShopMouseButton)
+	if ( waveManager.HandleShopCommand( this, token, src ) ) {
+		return true;
+	}
+// WAVESHOP END
+
 	if ( token.Icmp( "addhealth" ) == 0 ) {
 		if ( entityGui && health < 100 ) {
 			int _health = entityGui->spawnArgs.GetInt( "gui_parm1" );
@@ -6614,6 +6635,12 @@ the focus and sending it a mouse move event
 ================
 */
 void idPlayer::UpdateFocus( void ) {
+// WAVESHOP BEGIN
+	// don't let world GUIs or NPCs grab focus while the shop is open
+	if ( waveManager.IsShopOpen() ) {
+		return;
+	}
+// WAVESHOP END
 	
 	// These only need to be updated at the last tic
 	if ( !gameLocal.isLastPredictFrame ) {
@@ -7758,6 +7785,15 @@ idPlayer::UpdateViewAngles
 void idPlayer::UpdateViewAngles( void ) {
 	int i;
 	idAngles delta;
+
+// WAVESHOP BEGIN
+	// The mouse moves the shop cursor, not the view. Keep the deltas in
+	// sync so the view doesn't snap when the shop closes.
+	if ( waveManager.IsShopOpen() ) {
+		UpdateDeltaViewAngles( viewAngles );
+		return;
+	}
+// WAVESHOP END
 
 	if ( !noclip && ( gameLocal.inCinematic || privateCameraView || gameLocal.GetCamera() || influenceActive == INFLUENCE_LEVEL2 ) ) {
 		// no view changes at all, but we still want to update the deltas or else when
@@ -9354,6 +9390,30 @@ void idPlayer::Think( void ) {
 	usercmd = gameLocal.usercmds[ entityNumber ];
 	buttonMask &= usercmd.buttons;
 	usercmd.buttons &= ~buttonMask;
+
+// WAVESHOP BEGIN
+	// While the shop is open the player can't move, zoom or open the
+	// objectives. The fire button is left alone: Weapon_GUI() turns it
+	// into clicks on the shop.
+	if ( waveManager.ShopJustClosed() ) {
+		// the click that closed the shop is probably still held: don't fire until it's released
+		buttonMask |= BUTTON_ATTACK;
+		usercmd.buttons &= ~BUTTON_ATTACK;
+		StartSound( "snd_guiexit", SND_CHANNEL_ANY, 0, false, NULL );
+	}
+	if ( waveManager.IsShopOpen() ) {
+		if ( waveManager.ShopJustOpened() ) {
+			ClearFocus();
+			oldMouseX = usercmd.mx;		// start the cursor from here, not from a stale position
+			oldMouseY = usercmd.my;
+			StartSound( "snd_guienter", SND_CHANNEL_ANY, 0, false, NULL );
+		}
+		usercmd.forwardmove = 0;
+		usercmd.rightmove = 0;
+		usercmd.upmove = 0;
+		usercmd.buttons &= ~( BUTTON_ZOOM | BUTTON_SCORES );
+	}
+// WAVESHOP END
 
 	HandleObjectiveInput();
 	if ( objectiveSystemOpen ) {
@@ -12962,6 +13022,11 @@ void idPlayer::DamageFeedback( idEntity *victim, idEntity *inflictor, int &damag
 	if( !victim || ( !victim->IsType( idActor::GetClassType() ) && !victim->IsType( rvTramCar::GetClassType() ) ) || victim->health <= 0 ) {
 		return;
 	}
+
+// WAVESHOP BEGIN
+	// the primary gun's damage multiplier and heal-on-hit (shopGuns table)
+	waveManager.ModifyPlayerDamage( this, victim, damage );
+// WAVESHOP END
 
 	bool armorHit = false;
 

@@ -1960,6 +1960,10 @@ void idGameLocal::InitFromNewMap( const char *mapName, idRenderWorld *renderWorl
 
 	mpGame.Reset();
 
+// WAVESHOP BEGIN
+	waveManager.Reset( false );
+// WAVESHOP END
+
 	mpGame.Precache();
 
 // RAVEN BEGIN
@@ -2238,6 +2242,10 @@ bool idGameLocal::InitFromSaveGame( const char *mapName, idRenderWorld *renderWo
 
 	mpGame.Reset();
 
+// WAVESHOP BEGIN
+	waveManager.Reset( true );
+// WAVESHOP END
+
 	mpGame.Precache();
 
 	// free up any unused animations
@@ -2466,6 +2474,10 @@ void idGameLocal::MapShutdown( void ) {
 // jscott: cleanup playbacks
 	gameEdit->ShutdownPlaybacks();
 // RAVEN END
+
+// WAVESHOP BEGIN
+	waveManager.Clear();
+// WAVESHOP END
 
 	MapClear( true );
 
@@ -3683,6 +3695,11 @@ TIME_THIS_SCOPE("idGameLocal::RunFrame - gameDebug.BeginFrame()");
 		if ( isMultiplayer ) {
 			mpGame.Run();
 		}
+// WAVESHOP BEGIN
+		else {
+			waveManager.Run();
+		}
+// WAVESHOP END
 
 		// free the player pvs
 		FreePlayerPVS();
@@ -3902,6 +3919,10 @@ bool idGameLocal::Draw( int clientNum ) {
 // RAVEN END
 	// render the scene
 	player->playerView.RenderPlayerView( player->hud );
+
+// WAVESHOP BEGIN
+	waveManager.Draw();
+// WAVESHOP END
 
 // RAVEN BEGIN
 // bdube: debugging HUD
@@ -8506,3 +8527,1159 @@ void operator delete[]( void *p ) {
 #endif	// #else #ifdef ID_DEBUG_MEMORY
 #endif	// #if defined(ID_REDIRECT_NEWDELETE) || defined(_RV_MEM_SYS_SUPPORT)
 // RAVEN END
+
+// WAVESHOP BEGIN
+/*
+===============================================================================
+
+  rvWaveManager: single-player wave survival + between-wave shop.
+  Declared at the bottom of Game_local.h.
+
+===============================================================================
+*/
+
+// Defined in SysCmds.cpp. It is what the "give" console command uses;
+// ApplyLoadout() uses it to hand the player their primary gun.
+void GiveStuffToPlayer( idPlayer* player, const char* name, const char* value );
+
+rvWaveManager waveManager;
+
+static const int	SHOP_INPUT_GUARD_MS		= 400;		// ignore clicks this soon after the shop opens
+static const int	WAVE_CLEARED_PAUSE_MS	= 2000;		// "wave cleared" pause before the shop pops up
+static const float	SPAWN_MIN_PLAYER_DIST	= 384.0f;	// avoid spawn points closer than this to the player
+static const int	MAX_CASH				= 999999;
+
+static const char *waveStateNames[] = { "inactive", "countdown", "combat", "cleared", "shop", "start shop" };
+static const char *WAVESHOP_VERSION = "v10";	// printed on map load and by wave_status
+
+// the shop GUI; Reset loads it, and OpenShop tries again if that failed
+static idUserInterface *LoadShopGui( void ) {
+	return uiManager->FindGui( "guis/shop.gui", true, false, true );
+}
+
+/*
+===============================================================================
+
+  The guns. One row per gun, in shopWeaponType_t order.
+  This is the table to edit when you tune a gun:
+    name         shown in the shop
+    weapon       the Quake 4 weapon the player holds when it's the primary
+    damageScale  multiplies that weapon's normal damage (1 = unchanged)
+    healOnHit    health the player gets each time the gun hits an enemy
+  Anything a multiplier can't do, like the Fire gun's bigger blast
+  radius, is changed in the weapon's .def file instead.
+
+===============================================================================
+*/
+typedef struct {
+	const char *	name;
+	const char *	weapon;
+	float			damageScale;
+	int				healOnHit;
+} shopGunInfo_t;
+
+static const shopGunInfo_t shopGuns[ SW_NUM_TYPES ] = {
+	//	name				weapon						damage	heal
+	{	"",					"",							1.0f,	0	},	// SW_NONE
+	{	"Fire Gun",			"weapon_rocketlauncher",	0.75f,	0	},	// less damage; +50% blast radius is a .def edit
+	{	"Water Gun",		"weapon_hyperblaster",		5.0f,	0	},	// hyperblaster x5
+	{	"Earth Gun",		"weapon_nailgun",			1.0f,	2	},	// heals on hit
+	{	"Super Fire Gun",	"weapon_rocketlauncher",	1.5f,	0	},	// Fire Gun x2
+	{	"Super Water Gun",	"weapon_hyperblaster",		10.0f,	0	},	// Water Gun x2
+	{	"Super Earth Gun",	"weapon_nailgun",			2.0f,	2	},	// Earth Gun x2, still heals
+	{	"Steam Gun",		"weapon_dmg",				1.0f,	0	},	// dark matter gun
+	{	"Magma Gun",		"weapon_grenadelauncher",	2.0f,	10	},	// x2 damage, heals on hit
+	{	"Nature Gun",		"weapon_lightninggun",		1.0f,	0	},	// lightning gun
+};
+
+// What the shop sells, in the order of its boxes (hover codes 101, 102, 103)
+static const int shopItems[] = { SW_FIRE, SW_WATER, SW_EARTH };
+static const char *shopItemKeys[] = { "fire_gun", "water_gun", "earth_gun" };	// for gui::status_<key>
+static const int NUM_SHOP_ITEMS		= sizeof( shopItems ) / sizeof( shopItems[ 0 ] );
+
+// Hover codes the GUI writes into gui::hover
+static const int HOVER_PLACE_BASE	= 1;	// place p   -> 1 + p
+static const int HOVER_SHOP_BASE	= 101;	// shop item -> 101 + index
+
+/*
+================
+MergeShopGuns
+
+The merge rules. Returns false (with a reason for the player) if the two
+guns can't be combined.
+================
+*/
+static bool MergeShopGuns( int a, int b, int &out, const char **why ) {
+	bool aBasic = ( a == SW_FIRE || a == SW_WATER || a == SW_EARTH );
+	bool bBasic = ( b == SW_FIRE || b == SW_WATER || b == SW_EARTH );
+
+	if ( !aBasic || !bBasic ) {
+		*why = "Those can't be combined";
+		return false;
+	}
+
+	if ( a == b ) {
+		// two of the same basic gun: its Super version
+		out = ( a == SW_FIRE ) ? SW_SUPER_FIRE : ( a == SW_WATER ) ? SW_SUPER_WATER : SW_SUPER_EARTH;
+		return true;
+	}
+
+	// two different basic guns: the element that's missing decides the combo
+	if ( a != SW_EARTH && b != SW_EARTH ) {
+		out = SW_STEAM;		// fire + water
+	} else if ( a != SW_WATER && b != SW_WATER ) {
+		out = SW_MAGMA;		// fire + earth
+	} else {
+		out = SW_NATURE;	// water + earth
+	}
+	return true;
+}
+
+/*
+================
+rvWaveManager::rvWaveManager
+================
+*/
+rvWaveManager::rvWaveManager( void ) {
+	shopGui = NULL;
+	ClearState();
+}
+
+/*
+================
+rvWaveManager::ClearState
+
+Resets every field without touching the GUI (the old GUI pointer may
+already be gone after a level load).
+================
+*/
+void rvWaveManager::ClearState( void ) {
+	state			= WAVESTATE_INACTIVE;
+	returnState		= WAVESTATE_INACTIVE;
+	stateTime		= 0;
+	waveNumber		= 0;
+	toSpawn			= 0;
+	nextSpawnTime	= 0;
+	kills			= 0;
+	spawnedThisWave	= 0;
+	shopOpenTime	= 0;
+	shopJustOpened	= false;
+	shopJustClosed	= false;
+	pendingCash		= -1;
+	warnedSpawnFail	= false;
+
+	monsters.Clear();
+	spawnOrigins.Clear();
+	monsterDefs.Clear();
+
+	countBase		= 3;
+	countAdd		= 2;
+	maxAlive		= 6;
+	spawnDelay		= 1500;
+	startDelay		= 1000;
+	nextDelay		= 3000;
+	killCash		= 100;
+	clearCash		= 250;
+
+	shopGui			= NULL;		// owned by uiManager, never deleted here
+	shopMessage.Clear();
+	lastHudInfo.Clear();
+	lastHudCash.Clear();
+	lastHudActive	= -1;
+
+	for ( int i = 0; i < SHOP_NUM_PLACES; i++ ) {
+		places[ i ] = SW_NONE;
+	}
+	gunsBought		= 0;
+	held			= 0;
+	heldByClick		= false;
+}
+
+/*
+================
+rvWaveManager::Clear
+
+Called on map shutdown.
+================
+*/
+void rvWaveManager::Clear( void ) {
+	if ( shopGui && state == WAVESTATE_SHOP ) {
+		shopGui->Activate( false, gameLocal.time );
+	}
+	ClearState();
+}
+
+/*
+================
+rvWaveManager::Reset
+
+Called once a map is loaded (fromSaveGame = true when loading a save).
+================
+*/
+void rvWaveManager::Reset( bool fromSaveGame ) {
+	idEntity *ent;
+
+	ClearState();
+
+	if ( !gameLocal.world ) {
+		return;
+	}
+
+	// Collect the spawn points (the target_nulls with "wave_spawn" "1")
+	for ( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
+		if ( ent->spawnArgs.GetBool( "wave_spawn" ) ) {
+			spawnOrigins.Append( ent->GetPhysics()->GetOrigin() );
+		}
+	}
+	shopGui = LoadShopGui();
+	if ( !shopGui ) {
+		gameLocal.Warning( "WaveManager: could not load guis/shop.gui (will try again when the shop opens)" );
+	}
+
+	if ( fromSaveGame ) {
+		RestoreInventory();
+	}
+
+	// Tuning from worldspawn
+	const idDict &world = gameLocal.world->spawnArgs;
+
+	const idKeyValue *kv = world.MatchPrefix( "wave_monster" );
+	while ( kv ) {
+		if ( kv->GetValue().Length() ) {
+			if ( gameLocal.FindEntityDefDict( kv->GetValue().c_str(), false ) ) {
+				monsterDefs.Append( kv->GetValue() );
+			} else {
+				gameLocal.Warning( "WaveManager: unknown entityDef '%s' in %s", kv->GetValue().c_str(), kv->GetKey().c_str() );
+			}
+		}
+		kv = world.MatchPrefix( "wave_monster", kv );
+	}
+	if ( !monsterDefs.Num() ) {
+		monsterDefs.Append( "monster_gladiator" );
+	}
+
+	countBase	= world.GetInt( "wave_count_base",	"3" );
+	countAdd	= world.GetInt( "wave_count_add",	"2" );
+	maxAlive	= world.GetInt( "wave_max_alive",	"6" );
+	spawnDelay	= world.GetInt( "wave_spawn_delay",	"1500" );
+	startDelay	= world.GetInt( "wave_start_delay",	"1000" );	// ms after loading before the shop opens
+	nextDelay	= world.GetInt( "wave_next_delay",	"3000" );
+	killCash	= world.GetInt( "wave_kill_cash",	"100" );
+	clearCash	= world.GetInt( "wave_clear_cash",	"250" );
+	int startCash = world.GetInt( "wave_start_cash", "1000" );
+
+	if ( maxAlive < 1 ) {
+		maxAlive = 1;
+	}
+
+	if ( fromSaveGame ) {
+		// Persist() keeps these keys up to date on worldspawn, and entity
+		// spawnArgs are part of the savegame, so they come back on load.
+		waveNumber	= world.GetInt( "wave_saved_number",	"0" );
+		toSpawn		= world.GetInt( "wave_saved_tospawn",	"0" );
+		kills		= world.GetInt( "wave_saved_kills",		"0" );
+		pendingCash	= world.GetInt( "wave_saved_cash",		va( "%d", startCash ) );
+		int savedState = world.GetInt( "wave_saved_state", "1" );
+
+		// Re-track the enemies we spawned before the save
+		for ( ent = gameLocal.spawnedEntities.Next(); ent != NULL; ent = ent->spawnNode.Next() ) {
+			if ( ent->spawnArgs.GetBool( "wave_spawned_monster" ) && ent->health > 0 ) {
+				idEntityPtr<idEntity> ptr;
+				ptr = ent;
+				monsters.Append( ptr );
+			}
+		}
+		spawnedThisWave = monsters.Num();
+
+		if ( monsters.Num() || toSpawn > 0 ) {
+			SetState( WAVESTATE_COMBAT, 0 );
+		} else if ( savedState == WAVESTATE_SHOP || savedState == WAVESTATE_CLEARED || savedState == WAVESTATE_STARTSHOP ) {
+			// saved in (or just before) a shop: reopen it
+			SetState( waveNumber > 0 ? WAVESTATE_CLEARED : WAVESTATE_STARTSHOP, 1000 );
+		} else {
+			SetState( WAVESTATE_COUNTDOWN, nextDelay );
+		}
+	} else {
+		// a new run starts in the shop, once the player has loaded in
+		pendingCash = startCash;
+		SetState( WAVESTATE_STARTSHOP, startDelay );
+	}
+
+	gameLocal.Printf( "WaveManager %s: %d spawn points, %d monster types, wave %d, %s\n", WAVESHOP_VERSION,
+		spawnOrigins.Num(), monsterDefs.Num(), waveNumber, fromSaveGame ? "restored from the savegame" : "the run starts in the shop" );
+}
+
+/*
+================
+rvWaveManager::SetState
+================
+*/
+void rvWaveManager::SetState( waveState_t newState, int delayMs ) {
+	state = newState;
+	stateTime = gameLocal.time + delayMs;
+	Persist();
+}
+
+/*
+================
+rvWaveManager::Run
+
+Called once per game frame.
+================
+*/
+void rvWaveManager::Run( void ) {
+	idPlayer *player = gameLocal.GetLocalPlayer();
+	if ( !player ) {
+		return;
+	}
+
+	// starting cash (or cash from a savegame) is applied once the player exists
+	if ( pendingCash >= 0 ) {
+		player->buyMenuCash = (float)pendingCash;
+		pendingCash = -1;
+		if ( state == WAVESTATE_STARTSHOP ) {
+			// count the start delay from the first frame the player is in the map,
+			// not from the map load, so loading time can't eat into it
+			stateTime = gameLocal.time + startDelay;
+		}
+		Persist();
+	}
+
+	// hold everything while dead or during cinematics
+	if ( player->health <= 0 || gameLocal.inCinematic ) {
+		return;
+	}
+
+	UpdateMonsters( player );
+
+	switch ( state ) {
+		case WAVESTATE_COUNTDOWN:
+			if ( gameLocal.time >= stateTime ) {
+				BeginWave();
+			}
+			break;
+
+		case WAVESTATE_COMBAT:
+			if ( toSpawn > 0 && gameLocal.time >= nextSpawnTime && monsters.Num() < maxAlive ) {
+				SpawnMonster( player );
+				nextSpawnTime = gameLocal.time + spawnDelay;
+			}
+			if ( toSpawn <= 0 && monsters.Num() == 0 ) {
+				if ( spawnedThisWave == 0 ) {
+					// nothing could be spawned: stop instead of handing out free waves
+					gameLocal.Warning( "WaveManager: no enemies could be spawned, waves stopped (see the console warning above)" );
+					SetState( WAVESTATE_INACTIVE, 0 );
+					break;
+				}
+				AddCash( player, clearCash );
+				shopMessage = va( "Wave bonus: +$%d", clearCash );
+				SetState( WAVESTATE_CLEARED, WAVE_CLEARED_PAUSE_MS );
+			}
+			break;
+
+		case WAVESTATE_CLEARED:
+			if ( gameLocal.time >= stateTime ) {
+				returnState = WAVESTATE_CLEARED;
+				OpenShop();
+			}
+			break;
+
+		case WAVESTATE_STARTSHOP:
+			// the run starts in the shop; closing it starts wave 1
+			if ( gameLocal.time >= stateTime ) {
+				if ( player->inventory.weapons == 0 ) {
+					// clicks reach the shop through the weapon code, so the player needs a gun in hand
+					GiveStuffToPlayer( player, "weapon_blaster", NULL );
+				}
+				returnState = WAVESTATE_CLEARED;
+				OpenShop();
+			}
+			break;
+
+		default:
+			break;
+	}
+
+	UpdateHud( player );
+}
+
+/*
+================
+rvWaveManager::Draw
+
+Called by idGameLocal::Draw after the player view (world + HUD).
+================
+*/
+void rvWaveManager::Draw( void ) {
+	if ( !IsShopOpen() ) {
+		return;
+	}
+	if ( held ) {
+		// Move the dragged-weapon label to the mouse cursor. If your SDK's
+		// idUserInterface has no CursorX()/CursorY(), delete these three
+		// lines: dragging still works, the label just won't follow the mouse.
+		shopGui->SetStateFloat( "drag_x", shopGui->CursorX() );
+		shopGui->SetStateFloat( "drag_y", shopGui->CursorY() );
+		shopGui->StateChanged( gameLocal.time );
+	}
+	shopGui->Redraw( gameLocal.time );
+}
+
+/*
+================
+rvWaveManager::BeginWave
+================
+*/
+void rvWaveManager::BeginWave( void ) {
+	waveNumber++;
+	toSpawn = countBase + countAdd * ( waveNumber - 1 );
+	if ( toSpawn < 1 ) {
+		toSpawn = 1;
+	}
+	spawnedThisWave = 0;
+	nextSpawnTime = gameLocal.time;
+	shopMessage.Clear();
+	SetState( WAVESTATE_COMBAT, 0 );
+	gameLocal.Printf( "WaveManager: wave %d, %d enemies\n", waveNumber, toSpawn );
+}
+
+/*
+================
+rvWaveManager::SpawnMonster
+================
+*/
+void rvWaveManager::SpawnMonster( idPlayer *player ) {
+	// count the attempt even if it fails, so a bad def can't stall the wave
+	toSpawn--;
+	if ( !spawnOrigins.Num() ) {
+		// no "wave_spawn" points: nothing can spawn, and Run() stops the waves
+		if ( !warnedSpawnFail ) {
+			gameLocal.Warning( "WaveManager: this map has no \"wave_spawn\" points, so enemies can't spawn" );
+			warnedSpawnFail = true;
+		}
+		return;
+	}
+
+	// pick a random spawn point, preferring ones that aren't right next to the player
+	const idVec3 &playerOrigin = player->GetPhysics()->GetOrigin();
+	int num = spawnOrigins.Num();
+	int start = gameLocal.random.RandomInt( num );
+	int index = start;
+	for ( int tries = 0; tries < num; tries++ ) {
+		int i = ( start + tries ) % num;
+		if ( ( spawnOrigins[ i ] - playerOrigin ).LengthSqr() > SPAWN_MIN_PLAYER_DIST * SPAWN_MIN_PLAYER_DIST ) {
+			index = i;
+			break;
+		}
+	}
+
+	const idVec3 &origin = spawnOrigins[ index ];
+	idVec3 toPlayer = playerOrigin - origin;
+
+	idDict args;
+	args.SetVector( "origin", origin );
+	args.SetFloat( "angle", toPlayer.ToYaw() );		// face the player
+	args.SetBool( "wave_spawned_monster", true );	// lets a savegame find it again
+
+	const char *defName = monsterDefs[ gameLocal.random.RandomInt( monsterDefs.Num() ) ].c_str();
+	idEntity *ent = gameLocal.SpawnEntityDef( defName, &args );
+	if ( !ent ) {
+		if ( !warnedSpawnFail ) {
+			gameLocal.Warning( "WaveManager: could not spawn '%s' (check the def name, and that g_monsters is 1)", defName );
+			warnedSpawnFail = true;
+		}
+		return;
+	}
+
+	idEntityPtr<idEntity> ptr;
+	ptr = ent;
+	monsters.Append( ptr );
+	spawnedThisWave++;
+
+	// Wake it up with the player as the activator, the same thing a
+	// trigger targeting a monster does in a normal map.
+	ent->PostEventMS( &EV_Activate, 0, player );
+
+	Persist();
+}
+
+/*
+================
+rvWaveManager::UpdateMonsters
+
+Drops dead or removed enemies from the list and pays out kills.
+================
+*/
+void rvWaveManager::UpdateMonsters( idPlayer *player ) {
+	for ( int i = monsters.Num() - 1; i >= 0; i-- ) {
+		idEntity *ent = monsters[ i ].GetEntity();
+		if ( ent && ent->health > 0 ) {
+			continue;
+		}
+		if ( ent ) {
+			// died (an entity that was just removed, e.g. by wave_killall, pays nothing)
+			kills++;
+			AddCash( player, killCash );
+		}
+		monsters.RemoveIndex( i );
+		Persist();
+	}
+}
+
+/*
+================
+rvWaveManager::OpenShop
+================
+*/
+void rvWaveManager::OpenShop( void ) {
+	idPlayer *player = gameLocal.GetLocalPlayer();
+	if ( !player ) {
+		return;
+	}
+
+	if ( !shopGui ) {
+		shopGui = LoadShopGui();
+	}
+	if ( !shopGui ) {
+		// still no GUI: go on to the next wave rather than get stuck
+		gameLocal.Warning( "WaveManager: guis/shop.gui could not be loaded, so the shop was skipped" );
+		SetState( WAVESTATE_COUNTDOWN, nextDelay );
+		return;
+	}
+
+	SetState( WAVESTATE_SHOP, 0 );
+	shopOpenTime	= gameLocal.time;
+	shopJustOpened	= true;		// Player.cpp clears focus, syncs the mouse and plays a sound
+	shopJustClosed	= false;
+	held			= 0;
+	heldByClick		= false;
+
+	shopGui->SetStateInt( "hover", 0 );
+	shopGui->Activate( true, gameLocal.time );
+	UpdateShopGui( player );
+	shopGui->HandleNamedEvent( "shopOpen" );
+	UpdateHud( player );		// hides the wave readout
+	gameLocal.Printf( "WaveManager: shop opened\n" );
+}
+
+/*
+================
+rvWaveManager::CloseShop
+================
+*/
+void rvWaveManager::CloseShop( void ) {
+	if ( shopGui ) {
+		shopGui->Activate( false, gameLocal.time );
+	}
+	shopJustOpened	= false;
+	shopJustClosed	= true;
+	shopMessage.Clear();
+	held			= 0;
+	heldByClick		= false;
+
+	ApplyLoadout();
+	gameLocal.Printf( "WaveManager: shop closed\n" );
+
+	if ( returnState == WAVESTATE_CLEARED || returnState == WAVESTATE_SHOP ) {
+		SetState( WAVESTATE_COUNTDOWN, nextDelay );		// normal flow: next wave
+	} else {
+		state = returnState;							// opened with wave_shop: go back to what we were doing
+		Persist();
+	}
+}
+
+/*
+================
+rvWaveManager::ShopJustOpened / ShopJustClosed
+================
+*/
+bool rvWaveManager::ShopJustOpened( void ) {
+	bool result = shopJustOpened;
+	shopJustOpened = false;
+	return result;
+}
+
+bool rvWaveManager::ShopJustClosed( void ) {
+	bool result = shopJustClosed;
+	shopJustClosed = false;
+	return result;
+}
+
+/*
+================
+rvWaveManager::HandleShopCommand
+
+Called from idPlayer::HandleSingleGuiCommand for every command the
+shop GUI sends with  set "cmd" "..." . Returns true if it was ours.
+================
+*/
+bool rvWaveManager::HandleShopCommand( idPlayer *player, const idStr &cmd, idLexer *src ) {
+	if ( cmd.Icmp( "shopClose" ) == 0 ) {
+		if ( IsShopOpen() && gameLocal.time >= shopOpenTime + SHOP_INPUT_GUARD_MS ) {
+			CloseShop();
+		}
+		return true;
+	}
+	return false;
+}
+
+/*
+================
+rvWaveManager::GetGunCost
+
+Every shop gun costs the same: gun_cost_start, plus gun_cost_step for
+each gun bought so far this run. Both live in def/shop_prices.def.
+================
+*/
+int rvWaveManager::GetGunCost( void ) const {
+	const idDict *prices = gameLocal.FindEntityDefDict( "shop_prices", false );
+	int start	= prices ? prices->GetInt( "gun_cost_start", "300" ) : 300;
+	int step	= prices ? prices->GetInt( "gun_cost_step", "50" ) : 50;
+	return start + step * gunsBought;
+}
+
+/*
+================
+rvWaveManager::AddCash
+================
+*/
+void rvWaveManager::AddCash( idPlayer *player, int amount ) {
+	player->buyMenuCash = idMath::ClampFloat( 0.0f, (float)MAX_CASH, player->buyMenuCash + (float)amount );
+	Persist();
+	if ( IsShopOpen() ) {
+		UpdateShopGui( player );
+	}
+}
+
+/*
+================
+rvWaveManager::UpdateShopGui
+
+Pushes everything the shop GUI shows:
+	gui::shop_cash, gui::shop_title, gui::shop_next, gui::shop_message
+	gui::gun_cost        e.g. "$400", what every shop gun costs right now
+	gui::status_<gun>    0 can buy, 3 too expensive (fire_gun, water_gun, earth_gun)
+For every place p (0 primary, 1-4 secondaries, 5-9 inventory):
+	gui::place<p>_name   "Fire Gun", "(empty)" for slots, "" for the inventory
+	gui::place<p>_type   shopWeaponType_t, for the box colour
+	gui::place<p>_held   1 while that gun is being dragged
+and for the dragged-gun label: gui::drag_active, gui::drag_name.
+Then it fires the "shopUpdate" named event.
+================
+*/
+void rvWaveManager::UpdateShopGui( idPlayer *player ) {
+	if ( !shopGui || !player ) {
+		return;
+	}
+
+	shopGui->SetStateString( "shop_cash", va( "$%d", (int)player->buyMenuCash ) );
+	if ( waveNumber > 0 ) {
+		shopGui->SetStateString( "shop_title", va( "WAVE %d CLEARED", waveNumber ) );
+		shopGui->SetStateString( "shop_next", va( "Continue to wave %d", waveNumber + 1 ) );
+	} else {
+		// the shop at the start of a run
+		shopGui->SetStateString( "shop_title", "GET READY" );
+		shopGui->SetStateString( "shop_next", "Start wave 1" );
+	}
+	shopGui->SetStateString( "shop_message", shopMessage.c_str() );
+
+	// the shop's guns all cost the same
+	int gunCost = GetGunCost();
+	int status = ( gunCost > (int)player->buyMenuCash ) ? 3 : 0;	// 3 = too expensive: gun_cost turns red
+	shopGui->SetStateString( "gun_cost", va( "$%d", gunCost ) );
+	for ( int i = 0; i < NUM_SHOP_ITEMS; i++ ) {
+		shopGui->SetStateInt( va( "status_%s", shopItemKeys[ i ] ), status );
+	}
+
+	// the player's guns
+	int heldPlace = PlaceFromHover( held );
+	for ( int p = 0; p < SHOP_NUM_PLACES; p++ ) {
+		const char *name = shopGuns[ places[ p ] ].name;
+		if ( places[ p ] == SW_NONE && p < SHOP_PLACE_FIRST_LIST ) {
+			name = "(empty)";
+		}
+		shopGui->SetStateString( va( "place%d_name", p ), name );
+		shopGui->SetStateInt( va( "place%d_type", p ), places[ p ] );
+		shopGui->SetStateInt( va( "place%d_held", p ), ( p == heldPlace ) ? 1 : 0 );
+	}
+
+	// the label that follows the mouse while dragging
+	const char *dragName = "";
+	if ( heldPlace >= 0 ) {
+		dragName = shopGuns[ places[ heldPlace ] ].name;
+	} else if ( ShopItemFromHover( held ) >= 0 ) {
+		dragName = shopGuns[ shopItems[ ShopItemFromHover( held ) ] ].name;
+	}
+	shopGui->SetStateBool( "drag_active", held != 0 );
+	shopGui->SetStateString( "drag_name", dragName );
+
+	shopGui->StateChanged( gameLocal.time );
+	shopGui->HandleNamedEvent( "shopUpdate" );
+}
+
+/*
+================
+rvWaveManager::PlaceFromHover / ShopItemFromHover
+
+guis/shop.gui writes a code into gui::hover whenever the mouse is over
+something: 1 + place for a weapon place, 101 + index for a shop item,
+0 for nothing.
+================
+*/
+int rvWaveManager::PlaceFromHover( int hover ) const {
+	int place = hover - HOVER_PLACE_BASE;
+	return ( hover > 0 && place >= 0 && place < SHOP_NUM_PLACES ) ? place : -1;
+}
+
+int rvWaveManager::ShopItemFromHover( int hover ) const {
+	int item = hover - HOVER_SHOP_BASE;
+	return ( item >= 0 && item < NUM_SHOP_ITEMS ) ? item : -1;
+}
+
+/*
+================
+rvWaveManager::FirstFreePlace
+
+Where a clicked purchase goes: the primary slot if it's empty, then the
+secondary slots, then the inventory. -1 if everything is full.
+================
+*/
+int rvWaveManager::FirstFreePlace( void ) const {
+	for ( int p = 0; p < SHOP_NUM_PLACES; p++ ) {
+		if ( places[ p ] == SW_NONE ) {
+			return p;
+		}
+	}
+	return -1;
+}
+
+/*
+================
+rvWaveManager::BuyWeapon
+
+Buys shop item 'shopItem' into 'place'. If the place already holds a
+gun, the new one is merged into it (and the purchase fails if they
+can't merge).
+================
+*/
+bool rvWaveManager::BuyWeapon( idPlayer *player, int shopItem, int place ) {
+	if ( shopItem < 0 || shopItem >= NUM_SHOP_ITEMS ) {
+		return false;
+	}
+	int bought = shopItems[ shopItem ];
+	int price = GetGunCost();
+
+	if ( price > (int)player->buyMenuCash ) {
+		shopMessage = "Not enough money!";
+		return false;
+	}
+	if ( place < 0 || place >= SHOP_NUM_PLACES ) {
+		shopMessage = "No room! Merge or move something first";
+		return false;
+	}
+
+	if ( places[ place ] == SW_NONE ) {
+		places[ place ] = bought;
+		shopMessage = va( "Bought a %s for $%d", shopGuns[ bought ].name, price );
+	} else {
+		int merged;
+		const char *why = "";
+		if ( !MergeShopGuns( places[ place ], bought, merged, &why ) ) {
+			shopMessage = why;
+			return false;
+		}
+		places[ place ] = merged;
+		shopMessage = va( "Bought and merged: %s", shopGuns[ merged ].name );
+	}
+
+	player->buyMenuCash -= (float)price;
+	gunsBought++;				// every gun bought makes the next one cost more
+	PersistInventory();
+	Persist();
+	return true;
+}
+
+/*
+================
+rvWaveManager::DropOnto
+
+Something being dragged (a shop gun or a gun from another place) was
+dropped on 'place'.
+	empty place        -> it moves there (or is bought into it)
+	gun that merges    -> the two become one
+	gun that doesn't   -> the two swap places
+================
+*/
+bool rvWaveManager::DropOnto( idPlayer *player, int heldHover, int place ) {
+	int shopItem = ShopItemFromHover( heldHover );
+	if ( shopItem >= 0 ) {
+		return BuyWeapon( player, shopItem, place );
+	}
+
+	int from = PlaceFromHover( heldHover );
+	if ( from < 0 || from == place || places[ from ] == SW_NONE ) {
+		return false;
+	}
+
+	if ( places[ place ] == SW_NONE ) {
+		places[ place ] = places[ from ];
+		places[ from ] = SW_NONE;
+		shopMessage.Clear();
+	} else {
+		int merged;
+		const char *why = "";
+		if ( MergeShopGuns( places[ from ], places[ place ], merged, &why ) ) {
+			places[ place ] = merged;
+			places[ from ] = SW_NONE;
+			shopMessage = va( "Merged! You made a %s", shopGuns[ merged ].name );
+		} else {
+			int temp = places[ place ];
+			places[ place ] = places[ from ];
+			places[ from ] = temp;
+			shopMessage = va( "%s, so they swapped", why );
+		}
+	}
+
+	PersistInventory();
+	return true;
+}
+
+/*
+================
+rvWaveManager::ShopMouseButton
+
+Called by idPlayer::Weapon_GUI each time the fire button goes down or up
+while the shop is open. Works out drags and clicks from what the mouse
+was over (gui::hover):
+
+	press on X, release on X        click: buy (shop item) or pick up (weapon)
+	press on X, release on Y        drag: drop X onto Y
+	picked up, then click on Y      drop onto Y (click on nothing to cancel)
+================
+*/
+void rvWaveManager::ShopMouseButton( bool down ) {
+	idPlayer *player = gameLocal.GetLocalPlayer();
+	if ( !IsShopOpen() || !player || gameLocal.time < shopOpenTime + SHOP_INPUT_GUARD_MS ) {
+		return;
+	}
+
+	int hover = shopGui->State().GetInt( "hover" );
+	int hoverPlace = PlaceFromHover( hover );
+
+	if ( down ) {
+		if ( held ) {
+			return;		// carrying something picked up with a click: act on the release
+		}
+		bool canGrab = ( ShopItemFromHover( hover ) >= 0 ) || ( hoverPlace >= 0 && places[ hoverPlace ] != SW_NONE );
+		if ( canGrab ) {
+			held = hover;
+			heldByClick = false;
+			UpdateShopGui( player );
+		}
+		return;
+	}
+
+	// released
+	if ( !held ) {
+		return;
+	}
+
+	if ( !heldByClick && hover == held ) {
+		// pressed and released on the same thing: that's a click
+		int shopItem = ShopItemFromHover( held );
+		held = 0;
+		if ( shopItem >= 0 ) {
+			FinishShopAction( player, BuyWeapon( player, shopItem, FirstFreePlace() ) );
+		} else {
+			held = hover;
+			heldByClick = true;
+			shopMessage = "Click where to put it (click empty space to cancel)";
+			UpdateShopGui( player );
+		}
+		return;
+	}
+
+	int from = held;
+	held = 0;
+	heldByClick = false;
+
+	if ( hoverPlace < 0 || hover == from ) {
+		shopMessage.Clear();		// dropped on nothing: put it back
+		UpdateShopGui( player );
+		return;
+	}
+	FinishShopAction( player, DropOnto( player, from, hoverPlace ) );
+}
+
+/*
+================
+rvWaveManager::FinishShopAction
+================
+*/
+void rvWaveManager::FinishShopAction( idPlayer *player, bool ok ) {
+	UpdateShopGui( player );
+	shopGui->HandleNamedEvent( ok ? "buyOk" : "buyFailed" );
+}
+
+/*
+================
+rvWaveManager::PersistInventory / RestoreInventory
+
+Keeps the player's guns in worldspawn's spawnArgs ("shop_place0" = gun
+type, ...) so they survive save/load, like Persist() does for the wave
+state.
+================
+*/
+void rvWaveManager::PersistInventory( void ) {
+	if ( !gameLocal.world ) {
+		return;
+	}
+	for ( int p = 0; p < SHOP_NUM_PLACES; p++ ) {
+		gameLocal.world->spawnArgs.SetInt( va( "shop_place%d", p ), places[ p ] );
+	}
+	gameLocal.world->spawnArgs.SetInt( "shop_guns_bought", gunsBought );
+}
+
+void rvWaveManager::RestoreInventory( void ) {
+	if ( !gameLocal.world ) {
+		return;
+	}
+	for ( int p = 0; p < SHOP_NUM_PLACES; p++ ) {
+		int gun = gameLocal.world->spawnArgs.GetInt( va( "shop_place%d", p ), "0" );
+		places[ p ] = ( gun > SW_NONE && gun < SW_NUM_TYPES ) ? gun : SW_NONE;
+	}
+	gunsBought = gameLocal.world->spawnArgs.GetInt( "shop_guns_bought", "0" );
+}
+
+/*
+================
+rvWaveManager::ApplyLoadout
+
+Called when the shop closes. Gives the player the primary gun's weapon
+(exactly what typing "give weapon_..." in the console does), refills
+ammo, and makes it the only weapon the player carries. With an empty
+primary slot the player keeps whatever they had.
+Secondary guns aren't wired up to anything yet.
+================
+*/
+void rvWaveManager::ApplyLoadout( void ) {
+	for ( int p = 0; p < SHOP_PLACE_FIRST_LIST; p++ ) {
+		gameLocal.Printf( "WaveManager: %s %d: %s\n", p == SHOP_PLACE_PRIMARY ? "primary" : "secondary", p,
+			places[ p ] != SW_NONE ? shopGuns[ places[ p ] ].name : "-" );
+	}
+
+	idPlayer *player = gameLocal.GetLocalPlayer();
+	int gun = places[ SHOP_PLACE_PRIMARY ];
+	if ( !player || player->health <= 0 || gun == SW_NONE ) {
+		return;
+	}
+
+	const char *weapon = shopGuns[ gun ].weapon;
+	int slot = player->SlotForWeapon( weapon );
+	if ( slot < 0 ) {
+		gameLocal.Warning( "WaveManager: the player def has no def_weapon slot for '%s'", weapon );
+		return;
+	}
+
+	GiveStuffToPlayer( player, weapon, NULL );		// same as "give weapon_rocketlauncher"
+	GiveStuffToPlayer( player, "ammo", NULL );		// same as "give ammo": full ammo every floor
+
+	player->inventory.weapons = ( 1 << slot );		// the primary is the only gun the player carries
+	player->SelectWeapon( slot, true );
+}
+
+/*
+================
+rvWaveManager::ModifyPlayerDamage
+
+Called from idPlayer::DamageFeedback every time the player is about to
+damage something; 'damage' can still be changed. While the player holds
+their primary gun, its row in shopGuns scales the damage and heals the
+player.
+================
+*/
+void rvWaveManager::ModifyPlayerDamage( idPlayer *player, idEntity *victim, int &damage ) {
+	if ( !player || !victim || victim == player || damage <= 0 ) {
+		return;
+	}
+	// no bonus (or healing) for hitting your own side
+	if ( victim->IsType( idActor::GetClassType() ) && static_cast<idActor *>( victim )->team == player->team ) {
+		return;
+	}
+
+	int gun = places[ SHOP_PLACE_PRIMARY ];
+	if ( gun == SW_NONE || player->GetCurrentWeapon() != player->SlotForWeapon( shopGuns[ gun ].weapon ) ) {
+		return;		// not holding the primary gun
+	}
+
+	damage = (int)( (float)damage * shopGuns[ gun ].damageScale + 0.5f );
+	if ( damage < 1 ) {
+		damage = 1;
+	}
+
+	if ( shopGuns[ gun ].healOnHit > 0 && player->health > 0 ) {
+		player->health += shopGuns[ gun ].healOnHit;
+		if ( player->health > player->inventory.maxHealth ) {
+			player->health = player->inventory.maxHealth;
+		}
+	}
+}
+
+/*
+================
+rvWaveManager::UpdateHud
+
+Sets gui::wave_active, gui::wave_info and gui::wave_cash on the HUD,
+only when they change.
+================
+*/
+void rvWaveManager::UpdateHud( idPlayer *player ) {
+	idUserInterface *hud = player->hud;
+	if ( !hud ) {
+		return;
+	}
+
+	idStr info;
+	int active = 1;
+	switch ( state ) {
+		case WAVESTATE_COUNTDOWN: {
+			int secs = ( stateTime - gameLocal.time + 999 ) / 1000;
+			if ( secs < 0 ) {
+				secs = 0;
+			}
+			info = va( "WAVE %d STARTS IN %d", waveNumber + 1, secs );
+			break;
+		}
+		case WAVESTATE_COMBAT:
+			info = va( "WAVE %d   ENEMIES LEFT: %d", waveNumber, monsters.Num() + toSpawn );
+			break;
+		case WAVESTATE_CLEARED:
+			info = va( "WAVE %d CLEARED", waveNumber );
+			break;
+		default:
+			active = 0;		// waves stopped, or the shop is open
+			break;
+	}
+	idStr cash = va( "$%d", (int)player->buyMenuCash );
+
+	if ( active == lastHudActive && info == lastHudInfo && cash == lastHudCash ) {
+		return;
+	}
+	lastHudActive	= active;
+	lastHudInfo		= info;
+	lastHudCash		= cash;
+
+	hud->SetStateBool( "wave_active", active != 0 );
+	hud->SetStateString( "wave_info", info.c_str() );
+	hud->SetStateString( "wave_cash", cash.c_str() );
+	hud->StateChanged( gameLocal.time );
+}
+
+/*
+================
+rvWaveManager::Persist
+
+Mirrors the wave state into worldspawn's spawnArgs. Entity spawnArgs
+are written into savegames, so Reset( true ) can read them back.
+================
+*/
+void rvWaveManager::Persist( void ) {
+	if ( !gameLocal.world ) {
+		return;
+	}
+	idDict &world = gameLocal.world->spawnArgs;
+	world.SetInt( "wave_saved_number",	waveNumber );
+	world.SetInt( "wave_saved_state",	(int)state );
+	world.SetInt( "wave_saved_tospawn",	toSpawn );
+	world.SetInt( "wave_saved_kills",	kills );
+
+	idPlayer *player = gameLocal.GetLocalPlayer();
+	if ( player && pendingCash < 0 ) {
+		world.SetInt( "wave_saved_cash", (int)player->buyMenuCash );
+	}
+}
+
+/*
+================
+Debugging helpers
+================
+*/
+void rvWaveManager::OpenShopNow( void ) {
+	if ( !gameLocal.GetLocalPlayer() ) {
+		return;
+	}
+	if ( IsShopOpen() ) {
+		return;
+	}
+	if ( !shopGui ) {
+		shopGui = LoadShopGui();
+	}
+	if ( !shopGui ) {
+		gameLocal.Printf( "wave_shop: guis/shop.gui could not be loaded\n" );
+		return;
+	}
+	returnState = state;
+	OpenShop();
+}
+
+void rvWaveManager::KillAll( void ) {
+	for ( int i = 0; i < monsters.Num(); i++ ) {
+		idEntity *ent = monsters[ i ].GetEntity();
+		if ( ent ) {
+			ent->PostEventMS( &EV_Remove, 0 );
+		}
+	}
+	gameLocal.Printf( "wave_killall: removed %d enemies\n", monsters.Num() );
+	monsters.Clear();
+	toSpawn = 0;
+	Persist();
+}
+
+void rvWaveManager::StartNextWave( void ) {
+	if ( state == WAVESTATE_SHOP ) {
+		CloseShop();
+	}
+	if ( state == WAVESTATE_COUNTDOWN ) {
+		stateTime = gameLocal.time;
+	} else if ( state == WAVESTATE_INACTIVE ) {
+		gameLocal.Printf( "wave_next: the waves were stopped (see the warning above)\n" );
+	} else {
+		gameLocal.Printf( "wave_next: can't skip ahead while in state '%s'\n", waveStateNames[ state ] );
+	}
+}
+
+void rvWaveManager::PrintStatus( void ) const {
+	idPlayer *player = gameLocal.GetLocalPlayer();
+	gameLocal.Printf( "version:      %s\n", WAVESHOP_VERSION );
+	gameLocal.Printf( "state:        %s\n", waveStateNames[ state ] );
+	gameLocal.Printf( "wave:         %d\n", waveNumber );
+	gameLocal.Printf( "alive:        %d\n", monsters.Num() );
+	gameLocal.Printf( "to spawn:     %d\n", toSpawn );
+	gameLocal.Printf( "kills:        %d\n", kills );
+	gameLocal.Printf( "spawn points: %d\n", spawnOrigins.Num() );
+	gameLocal.Printf( "cash:         %d\n", player ? (int)player->buyMenuCash : 0 );
+	gameLocal.Printf( "gun cost:     %d (%d bought)\n", GetGunCost(), gunsBought );
+	gameLocal.Printf( "shop gui:     %s\n", shopGui ? "loaded" : "missing" );
+}
+
+/*
+================
+Console commands (registered in SysCmds.cpp)
+================
+*/
+void Cmd_WaveShop_f( const idCmdArgs &args ) {
+	waveManager.OpenShopNow();
+}
+
+void Cmd_WaveKillAll_f( const idCmdArgs &args ) {
+	waveManager.KillAll();
+}
+
+void Cmd_WaveNext_f( const idCmdArgs &args ) {
+	waveManager.StartNextWave();
+}
+
+void Cmd_WaveStatus_f( const idCmdArgs &args ) {
+	waveManager.PrintStatus();
+}
+// WAVESHOP END

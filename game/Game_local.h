@@ -1409,4 +1409,169 @@ ID_INLINE idEntityPtr<type>::operator type * ( void ) const {
 
 #include "../idlib/containers/ListGame.h"
 
+// WAVESHOP BEGIN
+//============================================================================
+// rvWaveManager: single-player wave survival + between-wave shop.
+// The code is at the bottom of Game_local.cpp.
+//
+// The mod always runs on the wave map (waveshop_arena), so this is always on.
+// Enemies appear at the map's target_nulls with "wave_spawn" "1", and the run
+// starts in the shop. Optional worldspawn keys (wave_monster,
+// wave_count_base, ...) are listed in INSTALL.md. Prices: def/shop_prices.def.
+//============================================================================
+
+typedef enum {
+	WAVESTATE_INACTIVE = 0,		// not running: no map loaded yet, or the waves were stopped after an error
+	WAVESTATE_COUNTDOWN,		// waiting to start the next wave
+	WAVESTATE_COMBAT,			// enemies spawning and/or alive
+	WAVESTATE_CLEARED,			// short pause after the last kill
+	WAVESTATE_SHOP,				// shop GUI is open
+	WAVESTATE_STARTSHOP			// map just loaded: the shop opens once the player is in
+} waveState_t;
+
+//----------------------------------------------------------------
+// Shop guns
+//
+// Each gun is one row in the shopGuns table (top of the shop code):
+// its name, the Quake 4 weapon it uses, a damage multiplier and how
+// much it heals per hit. The shop sells the fire, water and earth
+// guns; the others come from dropping one gun onto another:
+//   two of the same basic gun   -> its Super version
+//   two different basic guns    -> fire+water = Steam,
+//                                  fire+earth = Magma,
+//                                  water+earth = Nature
+//   anything else               -> no merge, the two swap places
+//
+// Every gun the player owns sits in one "place":
+//   place 0               the primary slot (the gun the player holds)
+//   places 1..4           the secondary slots (not wired up to anything yet)
+//   places 5..9           the inventory (owned but not equipped)
+//----------------------------------------------------------------
+
+typedef enum {
+	SW_NONE = 0,
+	SW_FIRE,			// sold in the shop
+	SW_WATER,			// sold in the shop
+	SW_EARTH,			// sold in the shop
+	SW_SUPER_FIRE,		// fire + fire
+	SW_SUPER_WATER,		// water + water
+	SW_SUPER_EARTH,		// earth + earth
+	SW_STEAM,			// fire + water
+	SW_MAGMA,			// fire + earth
+	SW_NATURE,			// water + earth
+	SW_NUM_TYPES
+} shopWeaponType_t;
+
+const int SHOP_SECONDARY_SLOTS			= 4;	// must match guis/shop.gui
+const int SHOP_LIST_SLOTS				= 5;	// inventory rows, must match guis/shop.gui
+const int SHOP_NUM_PLACES				= 1 + SHOP_SECONDARY_SLOTS + SHOP_LIST_SLOTS;
+const int SHOP_PLACE_PRIMARY			= 0;
+const int SHOP_PLACE_FIRST_SECONDARY	= 1;
+const int SHOP_PLACE_FIRST_LIST			= 1 + SHOP_SECONDARY_SLOTS;
+
+class rvWaveManager {
+public:
+							rvWaveManager( void );
+
+	// --- called from Game_local.cpp ---
+	void					Reset( bool fromSaveGame );	// map loaded
+	void					Clear( void );					// map shutting down
+	void					Run( void );					// once per game frame (single player)
+	void					Draw( void );					// after the player view is rendered
+
+	// --- called from Player.cpp ---
+	bool					IsShopOpen( void ) const { return state == WAVESTATE_SHOP && shopGui != NULL; }
+	bool					ShopJustOpened( void );			// true once, on the first frame the shop is open
+	bool					ShopJustClosed( void );			// true once, right after the shop closes
+	idUserInterface *		GetShopGui( void ) const { return shopGui; }
+	bool					HandleShopCommand( idPlayer *player, const idStr &cmd, idLexer *src );
+	void					ShopMouseButton( bool down );	// fire button pressed/released over the shop
+
+	void					ModifyPlayerDamage( idPlayer *player, idEntity *victim, int &damage );	// from idPlayer::DamageFeedback
+
+	// --- the player's guns (place 0 = primary, 1..4 = secondaries), as shopWeaponType_t ---
+	int						GetPlace( int place ) const { return places[ place ]; }
+
+	// --- console commands / debugging ---
+	void					OpenShopNow( void );
+	void					KillAll( void );
+	void					StartNextWave( void );
+	void					PrintStatus( void ) const;
+
+private:
+	void					ClearState( void );
+	void					SetState( waveState_t newState, int delayMs );
+	void					BeginWave( void );
+	void					SpawnMonster( idPlayer *player );
+	void					UpdateMonsters( idPlayer *player );
+	void					OpenShop( void );
+	void					CloseShop( void );
+
+	void					AddCash( idPlayer *player, int amount );
+
+	void					UpdateShopGui( idPlayer *player );
+	void					UpdateHud( idPlayer *player );
+	void					Persist( void );
+
+	// inventory and drag-and-drop
+	int						GetGunCost( void ) const;				// what any shop gun costs right now
+	int						PlaceFromHover( int hover ) const;		// -1 if the code isn't a place
+	int						ShopItemFromHover( int hover ) const;	// -1 if the code isn't a shop item
+	int						FirstFreePlace( void ) const;			// primary, then secondaries, then the list
+	bool					BuyWeapon( idPlayer *player, int shopItem, int place );
+	bool					DropOnto( idPlayer *player, int heldHover, int place );
+	void					FinishShopAction( idPlayer *player, bool ok );
+	void					PersistInventory( void );
+	void					RestoreInventory( void );
+	void					ApplyLoadout( void );
+
+	waveState_t				state;
+	waveState_t				returnState;		// where to go when the shop closes
+	int						stateTime;			// gameLocal.time when the current timer ends
+	int						waveNumber;			// current (or last finished) wave
+	int						toSpawn;			// enemies still to spawn this wave
+	int						nextSpawnTime;
+	int						kills;
+	int						spawnedThisWave;
+	int						shopOpenTime;
+	bool					shopJustOpened;
+	bool					shopJustClosed;
+	int						pendingCash;		// applied once the player exists (-1 = none)
+	bool					warnedSpawnFail;
+
+	idList< idEntityPtr<idEntity> >	monsters;	// enemies spawned by this manager that are still alive
+	idList<idVec3>			spawnOrigins;
+	idStrList				monsterDefs;
+
+	// tuning (read from worldspawn)
+	int						countBase;
+	int						countAdd;
+	int						maxAlive;
+	int						spawnDelay;
+	int						startDelay;
+	int						nextDelay;
+	int						killCash;
+	int						clearCash;
+
+	idUserInterface *		shopGui;
+	idStr					shopMessage;
+	idStr					lastHudInfo;
+	idStr					lastHudCash;
+	int						lastHudActive;		// -1 = HUD not updated yet
+
+	int						places[ SHOP_NUM_PLACES ];	// shopWeaponType_t in each place
+	int						gunsBought;			// guns bought this run; raises the gun cost
+	int						held;				// hover code of what's being dragged/carried, 0 = nothing
+	bool					heldByClick;		// picked up with a click (put down with the next click)
+};
+
+extern rvWaveManager		waveManager;
+
+// console commands, registered in SysCmds.cpp
+void Cmd_WaveShop_f( const idCmdArgs &args );
+void Cmd_WaveKillAll_f( const idCmdArgs &args );
+void Cmd_WaveNext_f( const idCmdArgs &args );
+void Cmd_WaveStatus_f( const idCmdArgs &args );
+// WAVESHOP END
+
 #endif	/* !__GAME_LOCAL_H__ */
