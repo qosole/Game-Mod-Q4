@@ -8549,6 +8549,8 @@ static const int	WAVE_CLEARED_PAUSE_MS	= 2000;		// "wave cleared" pause before t
 static const float	SPAWN_MIN_PLAYER_DIST	= 384.0f;	// avoid spawn points closer than this to the player
 static const int	HEALTH_NORMAL_WAVE		= 10;		// enemies have their def's health on this wave...
 static const int	HEALTH_PER_WAVE			= 7;		// ...plus this much for every wave after it (minus, before it)
+static const int	SECONDARY_FIRE_MS		= 2000;		// the secondary guns fire every 2 seconds...
+static const float	SECONDARY_DAMAGE		= 0.5f;		// ...at half damage (1 = full damage)
 static const int	MAX_CASH				= 999999;
 
 static const char *waveStateNames[] = { "inactive", "countdown", "combat", "cleared", "shop", "start shop" };
@@ -8658,6 +8660,7 @@ void rvWaveManager::ClearState( void ) {
 	waveNumber		= 0;
 	toSpawn			= 0;
 	nextSpawnTime	= 0;
+	nextSecondaryTime = 0;
 	kills			= 0;
 	spawnedThisWave	= 0;
 	shopOpenTime	= 0;
@@ -8868,6 +8871,11 @@ void rvWaveManager::Run( void ) {
 			break;
 
 		case WAVESTATE_COMBAT:
+			// the secondary guns fire by themselves every SECONDARY_FIRE_MS
+			if ( gameLocal.time >= nextSecondaryTime ) {
+				FireSecondaries( player );
+				nextSecondaryTime = gameLocal.time + SECONDARY_FIRE_MS;
+			}
 			if ( toSpawn > 0 && gameLocal.time >= nextSpawnTime && monsters.Num() < maxAlive ) {
 				SpawnMonster( player );
 				nextSpawnTime = gameLocal.time + spawnDelay;
@@ -8952,6 +8960,7 @@ void rvWaveManager::BeginWave( void ) {
 	}
 	spawnedThisWave = 0;
 	nextSpawnTime = gameLocal.time;
+	nextSecondaryTime = gameLocal.time + SECONDARY_FIRE_MS;	// first volley 2 seconds into the wave
 	shopMessage.Clear();
 	SetState( WAVESTATE_COMBAT, 0 );
 	gameLocal.Printf( "WaveManager: wave %d, %d enemies%s\n", waveNumber, toSpawn, IsBossWave( waveNumber ) ? " (boss wave)" : "" );
@@ -9484,7 +9493,8 @@ Called when the shop closes. Gives the player the primary gun's weapon
 (exactly what typing "give weapon_..." in the console does), refills
 ammo, and makes it the only weapon the player carries. With an empty
 primary slot the player keeps whatever they had.
-Secondary guns aren't wired up to anything yet.
+The secondary guns aren't given to the player: FireSecondaries() fires
+them straight from their weapon defs.
 ================
 */
 void rvWaveManager::ApplyLoadout( void ) {
@@ -9511,6 +9521,71 @@ void rvWaveManager::ApplyLoadout( void ) {
 
 	player->inventory.weapons = ( 1 << slot );		// the primary is the only gun the player carries
 	player->SelectWeapon( slot, true );
+}
+
+/*
+================
+rvWaveManager::FireSecondaries
+
+Every secondary slot that holds a gun fires once, from the player's eyes,
+where the player is looking. Called every SECONDARY_FIRE_MS during a wave.
+================
+*/
+void rvWaveManager::FireSecondaries( idPlayer *player ) {
+	idVec3 eye = player->GetEyePosition();
+	idVec3 dir = player->viewAngles.ToForward();
+
+	for ( int p = SHOP_PLACE_FIRST_SECONDARY; p < SHOP_PLACE_FIRST_LIST; p++ ) {
+		if ( places[ p ] != SW_NONE ) {
+			FireWeaponDef( player, shopGuns[ places[ p ] ].weapon, eye, dir );
+		}
+	}
+}
+
+/*
+================
+rvWaveManager::FireWeaponDef
+
+Fires one shot of a weapon the player isn't holding, straight from its
+def, at SECONDARY_DAMAGE. Weapons attack in one of three ways:
+	"def_projectile"   grenade, rocket, hyperblaster, dark matter, napalm
+	"def_hitscan"      blaster, machine gun, shotgun ("hitscans" pellets)
+	"def_damage"       lightning gun: damages what the line touches, out to "range"
+================
+*/
+void rvWaveManager::FireWeaponDef( idPlayer *player, const char *weaponName, const idVec3 &start, const idVec3 &dir ) {
+	const idDict *weapon = gameLocal.FindEntityDefDict( weaponName, false );
+	if ( !weapon ) {
+		return;
+	}
+	const idDict *attack;
+
+	if ( ( attack = gameLocal.FindEntityDefDict( weapon->GetString( "def_projectile" ), false ) ) != NULL ) {
+		idDict args = *attack;
+		idEntity *ent = NULL;
+		gameLocal.SpawnEntityDef( args, &ent, false );
+		if ( ent && ent->IsType( idProjectile::GetClassType() ) ) {
+			idProjectile *proj = static_cast<idProjectile *>( ent );
+			proj->Create( player, start, dir );
+			proj->Launch( start, dir, vec3_origin, 0.0f, SECONDARY_DAMAGE );
+		}
+	} else if ( ( attack = gameLocal.FindEntityDefDict( weapon->GetString( "def_hitscan" ), false ) ) != NULL ) {
+		int pellets = weapon->GetInt( "hitscans", "1" );
+		float spread = weapon->GetFloat( "spread" );
+		for ( int i = 0; i < pellets; i++ ) {
+			idAngles a = dir.ToAngles();
+			a.pitch += gameLocal.random.CRandomFloat() * spread;
+			a.yaw   += gameLocal.random.CRandomFloat() * spread;
+			gameLocal.HitScan( *attack, start, a.ToForward(), start, player, false, SECONDARY_DAMAGE );
+		}
+	} else if ( *weapon->GetString( "def_damage" ) ) {
+		trace_t tr;
+		gameLocal.TracePoint( player, tr, start, start + dir * weapon->GetFloat( "range", "1600" ), MASK_SHOT_RENDERMODEL, player );
+		idEntity *ent = ( tr.fraction < 1.0f ) ? gameLocal.entities[ tr.c.entityNum ] : NULL;
+		if ( ent && ent->fl.takedamage ) {
+			ent->Damage( player, player, dir, weapon->GetString( "def_damage" ), SECONDARY_DAMAGE, 0 );
+		}
+	}
 }
 
 /*

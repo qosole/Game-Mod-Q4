@@ -1444,7 +1444,7 @@ typedef enum {
 //
 // Every gun the player owns sits in one "place":
 //   place 0               the primary slot (the gun the player holds)
-//   places 1..4           the secondary slots (not wired up to anything yet)
+//   places 1..4           the secondary slots (fire by themselves every 2 seconds)
 //   places 5..9           the inventory (owned but not equipped)
 //----------------------------------------------------------------
 
@@ -1501,6 +1501,8 @@ private:
 	void					SetState( waveState_t newState, int delayMs );
 	void					BeginWave( void );
 	bool					IsBossWave( int wave ) const;	// every bossEvery-th wave, if the map names a boss
+	void					FireSecondaries( idPlayer *player );	// every secondary gun fires once, where the player looks
+	void					FireWeaponDef( idPlayer *player, const char *weaponName, const idVec3 &start, const idVec3 &dir );
 	void					SpawnMonster( idPlayer *player );
 	void					UpdateMonsters( idPlayer *player );
 	void					OpenShop( void );
@@ -1530,6 +1532,7 @@ private:
 	int						waveNumber;			// current (or last finished) wave
 	int						toSpawn;			// enemies still to spawn this wave
 	int						nextSpawnTime;
+	int						nextSecondaryTime;	// when the secondary guns fire next
 	int						kills;
 	int						spawnedThisWave;
 	int						shopOpenTime;
