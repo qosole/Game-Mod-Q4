@@ -1433,9 +1433,9 @@ typedef enum {
 // Shop guns
 //
 // Each gun is one row in the shopGuns table (top of the shop code):
-// its name, the Quake 4 weapon it uses, a damage multiplier and how
-// much it heals per hit. The shop sells the fire, water and earth
-// guns; the others come from dropping one gun onto another:
+// its name and the Quake 4 weapon it gives the player. How hard a gun
+// hits is set in that weapon's def file. The shop sells the fire,
+// water and earth guns; the others come from dropping one gun onto another:
 //   two of the same basic gun   -> its Super version
 //   two different basic guns    -> fire+water = Steam,
 //                                  fire+earth = Magma,
@@ -1486,8 +1486,6 @@ public:
 	idUserInterface *		GetShopGui( void ) const { return shopGui; }
 	bool					HandleShopCommand( idPlayer *player, const idStr &cmd, idLexer *src );
 	void					ShopMouseButton( bool down );	// fire button pressed/released over the shop
-
-	void					ModifyPlayerDamage( idPlayer *player, idEntity *victim, int &damage );	// from idPlayer::DamageFeedback
 
 	// --- the player's guns (place 0 = primary, 1..4 = secondaries), as shopWeaponType_t ---
 	int						GetPlace( int place ) const { return places[ place ]; }

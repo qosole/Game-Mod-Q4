@@ -8550,7 +8550,7 @@ static const float	SPAWN_MIN_PLAYER_DIST	= 384.0f;	// avoid spawn points closer 
 static const int	MAX_CASH				= 999999;
 
 static const char *waveStateNames[] = { "inactive", "countdown", "combat", "cleared", "shop", "start shop" };
-static const char *WAVESHOP_VERSION = "v10";	// printed on map load and by wave_status
+static const char *WAVESHOP_VERSION = "v11";	// printed on map load and by wave_status
 
 // the shop GUI; Reset loads it, and OpenShop tries again if that failed
 static idUserInterface *LoadShopGui( void ) {
@@ -8560,36 +8560,33 @@ static idUserInterface *LoadShopGui( void ) {
 /*
 ===============================================================================
 
-  The guns. One row per gun, in shopWeaponType_t order.
-  This is the table to edit when you tune a gun:
-    name         shown in the shop
-    weapon       the Quake 4 weapon the player holds when it's the primary
-    damageScale  multiplies that weapon's normal damage (1 = unchanged)
-    healOnHit    health the player gets each time the gun hits an enemy
-  Anything a multiplier can't do, like the Fire gun's bigger blast
-  radius, is changed in the weapon's .def file instead.
+  The guns. One row per gun, in shopWeaponType_t order:
+    name     shown in the shop
+    weapon   the Quake 4 weapon the player gets when it's the primary
+  Everything about how a gun fights (damage, fire rate, blast radius)
+  comes from its weapon's def file, so that's where to tune it. This
+  works because every gun uses a different weapon: two guns sharing a
+  weapon would also share its damage.
 
 ===============================================================================
 */
 typedef struct {
 	const char *	name;
 	const char *	weapon;
-	float			damageScale;
-	int				healOnHit;
 } shopGunInfo_t;
 
 static const shopGunInfo_t shopGuns[ SW_NUM_TYPES ] = {
-	//	name				weapon						damage	heal
-	{	"",					"",							1.0f,	0	},	// SW_NONE
-	{	"Fire Gun",			"weapon_rocketlauncher",	0.75f,	0	},	// less damage; +50% blast radius is a .def edit
-	{	"Water Gun",		"weapon_hyperblaster",		5.0f,	0	},	// hyperblaster x5
-	{	"Earth Gun",		"weapon_nailgun",			1.0f,	2	},	// heals on hit
-	{	"Super Fire Gun",	"weapon_rocketlauncher",	1.5f,	0	},	// Fire Gun x2
-	{	"Super Water Gun",	"weapon_hyperblaster",		10.0f,	0	},	// Water Gun x2
-	{	"Super Earth Gun",	"weapon_nailgun",			2.0f,	2	},	// Earth Gun x2, still heals
-	{	"Steam Gun",		"weapon_dmg",				1.0f,	0	},	// dark matter gun
-	{	"Magma Gun",		"weapon_grenadelauncher",	2.0f,	10	},	// x2 damage, heals on hit
-	{	"Nature Gun",		"weapon_lightninggun",		1.0f,	0	},	// lightning gun
+	//	name				weapon
+	{	"",					""								},	// SW_NONE
+	{	"Fire Gun",			"weapon_grenadelauncher"		},
+	{	"Water Gun",		"weapon_blaster"				},
+	{	"Earth Gun",		"weapon_machinegun"				},
+	{	"Super Fire Gun",	"weapon_rocketlauncher"			},
+	{	"Super Water Gun",	"weapon_hyperblaster"			},
+	{	"Super Earth Gun",	"weapon_shotgun"				},
+	{	"Steam Gun",		"weapon_dmg"					},	// dark matter gun
+	{	"Magma Gun",		"weapon_napalmgun"				},	// napalm launcher
+	{	"Nature Gun",		"weapon_lightninggun"			},	// lightning gun
 };
 
 // What the shop sells, in the order of its boxes (hover codes 101, 102, 103)
@@ -8915,6 +8912,7 @@ void rvWaveManager::Draw( void ) {
 		return;
 	}
 	if ( held ) {
+		// Move the dragged-weapon label to the mouse cursor
 		shopGui->SetStateFloat( "drag_x", shopGui->CursorX() );
 		shopGui->SetStateFloat( "drag_y", shopGui->CursorY() );
 		shopGui->StateChanged( gameLocal.time );
@@ -9483,43 +9481,6 @@ void rvWaveManager::ApplyLoadout( void ) {
 
 	player->inventory.weapons = ( 1 << slot );		// the primary is the only gun the player carries
 	player->SelectWeapon( slot, true );
-}
-
-/*
-================
-rvWaveManager::ModifyPlayerDamage
-
-Called from idPlayer::DamageFeedback every time the player is about to
-damage something; 'damage' can still be changed. While the player holds
-their primary gun, its row in shopGuns scales the damage and heals the
-player.
-================
-*/
-void rvWaveManager::ModifyPlayerDamage( idPlayer *player, idEntity *victim, int &damage ) {
-	if ( !player || !victim || victim == player || damage <= 0 ) {
-		return;
-	}
-	// no bonus (or healing) for hitting your own side
-	if ( victim->IsType( idActor::GetClassType() ) && static_cast<idActor *>( victim )->team == player->team ) {
-		return;
-	}
-
-	int gun = places[ SHOP_PLACE_PRIMARY ];
-	if ( gun == SW_NONE || player->GetCurrentWeapon() != player->SlotForWeapon( shopGuns[ gun ].weapon ) ) {
-		return;		// not holding the primary gun
-	}
-
-	damage = (int)( (float)damage * shopGuns[ gun ].damageScale + 0.5f );
-	if ( damage < 1 ) {
-		damage = 1;
-	}
-
-	if ( shopGuns[ gun ].healOnHit > 0 && player->health > 0 ) {
-		player->health += shopGuns[ gun ].healOnHit;
-		if ( player->health > player->inventory.maxHealth ) {
-			player->health = player->inventory.maxHealth;
-		}
-	}
 }
 
 /*

@@ -13023,11 +13023,6 @@ void idPlayer::DamageFeedback( idEntity *victim, idEntity *inflictor, int &damag
 		return;
 	}
 
-// WAVESHOP BEGIN
-	// the primary gun's damage multiplier and heal-on-hit (shopGuns table)
-	waveManager.ModifyPlayerDamage( this, victim, damage );
-// WAVESHOP END
-
 	bool armorHit = false;
 
 	if( gameLocal.isMultiplayer && victim->IsType( idPlayer::GetClassType() ) ) {
