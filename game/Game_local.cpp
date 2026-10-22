@@ -8547,10 +8547,11 @@ rvWaveManager waveManager;
 static const int	SHOP_INPUT_GUARD_MS		= 400;		// ignore clicks this soon after the shop opens
 static const int	WAVE_CLEARED_PAUSE_MS	= 2000;		// "wave cleared" pause before the shop pops up
 static const float	SPAWN_MIN_PLAYER_DIST	= 384.0f;	// avoid spawn points closer than this to the player
+static const int	HEALTH_NORMAL_WAVE		= 10;		// enemies have their def's health on this wave...
+static const int	HEALTH_PER_WAVE			= 7;		// ...plus this much for every wave after it (minus, before it)
 static const int	MAX_CASH				= 999999;
 
 static const char *waveStateNames[] = { "inactive", "countdown", "combat", "cleared", "shop", "start shop" };
-static const char *WAVESHOP_VERSION = "v11";	// printed on map load and by wave_status
 
 // the shop GUI; Reset loads it, and OpenShop tries again if that failed
 static idUserInterface *LoadShopGui( void ) {
@@ -8677,6 +8678,9 @@ void rvWaveManager::ClearState( void ) {
 	nextDelay		= 3000;
 	killCash		= 100;
 	clearCash		= 250;
+	bossDef.Clear();
+	bossEvery		= 5;
+	bossCash		= 1000;
 
 	shopGui			= NULL;		// owned by uiManager, never deleted here
 	shopMessage.Clear();
@@ -8763,6 +8767,13 @@ void rvWaveManager::Reset( bool fromSaveGame ) {
 	nextDelay	= world.GetInt( "wave_next_delay",	"3000" );
 	killCash	= world.GetInt( "wave_kill_cash",	"100" );
 	clearCash	= world.GetInt( "wave_clear_cash",	"250" );
+	bossDef		= world.GetString( "wave_boss",		"" );		// no key = no boss waves
+	bossEvery	= world.GetInt( "wave_boss_every",	"5" );
+	bossCash	= world.GetInt( "wave_boss_cash",		"1000" );
+	if ( bossDef.Length() && !gameLocal.FindEntityDefDict( bossDef.c_str(), false ) ) {
+		gameLocal.Warning( "WaveManager: unknown entityDef '%s' in wave_boss, so there are no boss waves", bossDef.c_str() );
+		bossDef.Clear();
+	}
 	int startCash = world.GetInt( "wave_start_cash", "1000" );
 
 	if ( maxAlive < 1 ) {
@@ -8802,7 +8813,7 @@ void rvWaveManager::Reset( bool fromSaveGame ) {
 		SetState( WAVESTATE_STARTSHOP, startDelay );
 	}
 
-	gameLocal.Printf( "WaveManager %s: %d spawn points, %d monster types, wave %d, %s\n", WAVESHOP_VERSION,
+	gameLocal.Printf( "WaveManager: %d spawn points, %d monster types, wave %d, %s\n",
 		spawnOrigins.Num(), monsterDefs.Num(), waveNumber, fromSaveGame ? "restored from the savegame" : "the run starts in the shop" );
 }
 
@@ -8925,9 +8936,17 @@ void rvWaveManager::Draw( void ) {
 rvWaveManager::BeginWave
 ================
 */
+bool rvWaveManager::IsBossWave( int wave ) const {
+	return bossDef.Length() > 0 && bossEvery > 0 && wave > 0 && wave % bossEvery == 0;
+}
+
 void rvWaveManager::BeginWave( void ) {
 	waveNumber++;
-	toSpawn = countBase + countAdd * ( waveNumber - 1 );
+	if ( IsBossWave( waveNumber ) ) {
+		toSpawn = 1;		// a boss wave is just the boss
+	} else {
+		toSpawn = countBase + countAdd * ( waveNumber - 1 );
+	}
 	if ( toSpawn < 1 ) {
 		toSpawn = 1;
 	}
@@ -8935,7 +8954,7 @@ void rvWaveManager::BeginWave( void ) {
 	nextSpawnTime = gameLocal.time;
 	shopMessage.Clear();
 	SetState( WAVESTATE_COMBAT, 0 );
-	gameLocal.Printf( "WaveManager: wave %d, %d enemies\n", waveNumber, toSpawn );
+	gameLocal.Printf( "WaveManager: wave %d, %d enemies%s\n", waveNumber, toSpawn, IsBossWave( waveNumber ) ? " (boss wave)" : "" );
 }
 
 /*
@@ -8976,7 +8995,18 @@ void rvWaveManager::SpawnMonster( idPlayer *player ) {
 	args.SetFloat( "angle", toPlayer.ToYaw() );		// face the player
 	args.SetBool( "wave_spawned_monster", true );	// lets a savegame find it again
 
-	const char *defName = monsterDefs[ gameLocal.random.RandomInt( monsterDefs.Num() ) ].c_str();
+	const char *defName;
+	if ( IsBossWave( waveNumber ) ) {
+		defName = bossDef.c_str();
+	} else {
+		defName = monsterDefs[ gameLocal.random.RandomInt( monsterDefs.Num() ) ].c_str();
+	}
+
+	// health scales with the wave: the def's "health" + ( wave - 10 ) * 5, never below 1
+	const idDict *monsterDict = gameLocal.FindEntityDefDict( defName, false );
+	int health = ( monsterDict ? monsterDict->GetInt( "health" ) : 0 ) + ( waveNumber - HEALTH_NORMAL_WAVE ) * HEALTH_PER_WAVE;
+	args.SetInt( "health", health > 1 ? health : 1 );
+
 	idEntity *ent = gameLocal.SpawnEntityDef( defName, &args );
 	if ( !ent ) {
 		if ( !warnedSpawnFail ) {
@@ -9014,7 +9044,7 @@ void rvWaveManager::UpdateMonsters( idPlayer *player ) {
 		if ( ent ) {
 			// died (an entity that was just removed, e.g. by wave_killall, pays nothing)
 			kills++;
-			AddCash( player, killCash );
+			AddCash( player, IsBossWave( waveNumber ) ? bossCash : killCash );
 		}
 		monsters.RemoveIndex( i );
 		Persist();
@@ -9169,7 +9199,7 @@ void rvWaveManager::UpdateShopGui( idPlayer *player ) {
 
 	shopGui->SetStateString( "shop_cash", va( "$%d", (int)player->buyMenuCash ) );
 	if ( waveNumber > 0 ) {
-		shopGui->SetStateString( "shop_title", va( "WAVE %d CLEARED", waveNumber ) );
+		shopGui->SetStateString( "shop_title", IsBossWave( waveNumber ) ? "BOSS DEFEATED" : va( "WAVE %d CLEARED", waveNumber ) );
 		shopGui->SetStateString( "shop_next", va( "Continue to wave %d", waveNumber + 1 ) );
 	} else {
 		// the shop at the start of a run
@@ -9505,14 +9535,18 @@ void rvWaveManager::UpdateHud( idPlayer *player ) {
 			if ( secs < 0 ) {
 				secs = 0;
 			}
-			info = va( "WAVE %d STARTS IN %d", waveNumber + 1, secs );
+			info = va( IsBossWave( waveNumber + 1 ) ? "BOSS WAVE %d STARTS IN %d" : "WAVE %d STARTS IN %d", waveNumber + 1, secs );
 			break;
 		}
 		case WAVESTATE_COMBAT:
-			info = va( "WAVE %d   ENEMIES LEFT: %d", waveNumber, monsters.Num() + toSpawn );
+			if ( IsBossWave( waveNumber ) ) {
+				info = va( "BOSS WAVE %d", waveNumber );
+			} else {
+				info = va( "WAVE %d   ENEMIES LEFT: %d", waveNumber, monsters.Num() + toSpawn );
+			}
 			break;
 		case WAVESTATE_CLEARED:
-			info = va( "WAVE %d CLEARED", waveNumber );
+			info = IsBossWave( waveNumber ) ? "BOSS DEFEATED" : va( "WAVE %d CLEARED", waveNumber );
 			break;
 		default:
 			active = 0;		// waves stopped, or the shop is open
@@ -9608,7 +9642,6 @@ void rvWaveManager::StartNextWave( void ) {
 
 void rvWaveManager::PrintStatus( void ) const {
 	idPlayer *player = gameLocal.GetLocalPlayer();
-	gameLocal.Printf( "version:      %s\n", WAVESHOP_VERSION );
 	gameLocal.Printf( "state:        %s\n", waveStateNames[ state ] );
 	gameLocal.Printf( "wave:         %d\n", waveNumber );
 	gameLocal.Printf( "alive:        %d\n", monsters.Num() );

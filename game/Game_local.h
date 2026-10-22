@@ -1500,6 +1500,7 @@ private:
 	void					ClearState( void );
 	void					SetState( waveState_t newState, int delayMs );
 	void					BeginWave( void );
+	bool					IsBossWave( int wave ) const;	// every bossEvery-th wave, if the map names a boss
 	void					SpawnMonster( idPlayer *player );
 	void					UpdateMonsters( idPlayer *player );
 	void					OpenShop( void );
@@ -1550,6 +1551,9 @@ private:
 	int						nextDelay;
 	int						killCash;
 	int						clearCash;
+	idStr					bossDef;			// "wave_boss": the boss's entityDef ("" = no boss waves)
+	int						bossEvery;			// "wave_boss_every": every Nth wave is a boss wave
+	int						bossCash;			// "wave_boss_cash": money for killing the boss
 
 	idUserInterface *		shopGui;
 	idStr					shopMessage;
