@@ -327,6 +327,9 @@ entityDef hitscan_shotgun_pellet
 	// for multiplayer clients. we only sync the hitscan def
 	// must be the same as weapon_shotgun_mp
 	"hitscans"				"11"
+	// WAVESHOP BEGIN
+	"range"					"64"
+	// WAVESHOP END
 }
 
 //--------------------------------------------------------------------------------------------------------------------
