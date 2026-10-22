@@ -8915,9 +8915,6 @@ void rvWaveManager::Draw( void ) {
 		return;
 	}
 	if ( held ) {
-		// Move the dragged-weapon label to the mouse cursor. If your SDK's
-		// idUserInterface has no CursorX()/CursorY(), delete these three
-		// lines: dragging still works, the label just won't follow the mouse.
 		shopGui->SetStateFloat( "drag_x", shopGui->CursorX() );
 		shopGui->SetStateFloat( "drag_y", shopGui->CursorY() );
 		shopGui->StateChanged( gameLocal.time );
