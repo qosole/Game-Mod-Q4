@@ -5,6 +5,8 @@ Version 3
 // WAVESHOP: wave settings. The other wave_* tuning keys in INSTALL.md can go here too.
 "wave_monster" "monster_strogg_marine_convoy"
 "wave_monster_2" "monster_strogg_marine_mgun_convoy"
+// WAVESHOP: the boss of every 5th wave
+"wave_boss" "monster_stream_protector"
 // primitive 0
 {
  brushDef3
@@ -263,6 +265,17 @@ Version 3
 }
 // entity 7
 {
+// WAVESHOP: navigation seed for the boss; never spawns
+"classname" "monster_stream_protector"
+"name" "aas_seed_3"
+"origin" "0 768 8"
+"angle" "270"
+"not_easy" "1"
+"not_medium" "1"
+"not_hard" "1"
+}
+// entity 8
+{
 // sunlight
 "classname" "light"
 "name" "light_sun"
@@ -277,7 +290,7 @@ Version 3
 "noshadows" "0"
 "_color" "0.62 0.57 0.53"
 }
-// entity 8
+// entity 9
 {
 "classname" "light"
 "name" "light_fill"
@@ -291,7 +304,7 @@ Version 3
 "noshadows" "1"
 "_color" "0.2 0.18 0.16"
 }
-// entity 9
+// entity 10
 {
 // portal sky camera (sees convoy1's sky room)
 "classname" "func_camera_portalsky"
