@@ -100,8 +100,8 @@ entityDef weapon_machinegun
 	"def_althitscan"			"hitscan_zoomed_bullet"
 	
 	"ammoType"					"ammo_machinegun"
-	"ammoRequired"				"0"
-	"clipSize"					"0"
+	"ammoRequired"				"0"		// WAVESHOP CHANGE: infinite ammo
+	"clipSize"					"0"		// WAVESHOP CHANGE: infinite ammo
 	"lowAmmo"					"10"
 	"gui"						"guis/weapons/machinegun_ammo.gui"
 	"gui2"						"guis/weapons/machinegun_inview_scope.gui"
@@ -342,7 +342,7 @@ model weapon_machinegun_world
 
 entityDef hitscan_bullet
 {
-	"range"						"40000"
+	"range"						"64"	// WAVESHOP CHANGE: changed range from 40000 to 64
 
 	"fx_impact"				"effects/weapons/machinegun/impact_default.fx"
 	"fx_impact_water"			"effects/ambient/splash_smll.fx"
@@ -380,8 +380,8 @@ entityDef hitscan_zoomed_bullet
 entityDef damage_machinegun
 {
 	"inherit"					"damage_bullet"
-	"damage"					"15"
-	"damage_flesh"				"18"
+	"damage"					"7"		// WAVESHOP CHANGE: subtracted 1, then halved
+	"damage_flesh"				"9"		// WAVESHOP CHANGE: halved
 
 	"deathPush"					"100"
 	"deathPushMin"				"3000 350"
@@ -391,7 +391,7 @@ entityDef damage_machinegun
 entityDef damage_machinegun_flesh
 {
 	"inherit"					"damage_machinegun"
-	"damage"					"18"
+	"damage"					"9"		// WAVESHOP CHANGE: halved
 }
 
 //---------------------------------------------------------------
@@ -400,14 +400,14 @@ entityDef damage_machinegun_flesh
 entityDef damage_machinegun_zoom
 {
 	"inherit"					"damage_machinegun"
-	"damage"					"20"
-	"damage_flesh"				"24"
+	"damage"					"10"	// WAVESHOP CHANGE: halved
+	"damage_flesh"				"12"	// WAVESHOP CHANGE: halved
 }
 
 entityDef damage_machinegun_zoom_flesh
 {
 	"inherit"					"damage_machinegun"
-	"damage"					"24"
+	"damage"					"12"	// WAVESHOP CHANGED: halved
 }
 
 //---------------------------------------------------------------
