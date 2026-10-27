@@ -431,9 +431,12 @@ stateResult_t rvWeaponBlaster::State_Fire ( const stateParms_t& parms ) {
 				PlayEffect ( "fx_chargedflash", barrelJointView, false );
 				PlayAnim( ANIMCHANNEL_ALL, "chargedfire", parms.blendFrames );
 			} else {
-				Attack ( false, 1, spread, 0, 1.0f );
-				PlayEffect ( "fx_normalflash", barrelJointView, false );
-				PlayAnim( ANIMCHANNEL_ALL, "fire", parms.blendFrames );
+				// WAVESHOP BEGIN
+				// Commenting out the original code to remove the Blaster's normal shot
+				// Attack ( false, 1, spread, 0, 1.0f );
+				// PlayEffect ( "fx_normalflash", barrelJointView, false );
+				// PlayAnim( ANIMCHANNEL_ALL, "fire", parms.blendFrames );
+				// WAVESHOP END
 			}
 			fireHeldTime = 0;
 			

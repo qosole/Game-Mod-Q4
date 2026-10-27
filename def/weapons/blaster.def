@@ -325,14 +325,14 @@ entityDef damage_blaster
 entityDef damage_blaster_charged
 {
 	"inherit"					"damage_blaster"
-	"damage"					"50"
+	"damage"					"25"	// WAVESHOP CHANGE: halved damage
 }
 
 entityDef damage_blastersplash_charged
 {
 	"inherit"					"damage_blaster"
 	
-	"damage"					"40"
+	"damage"					"20"	// WAVESHOP CHANGE: halved damage
 	"radius"					"50"
 	"knockback"					"30"
 	"push"						"2500"
