@@ -8600,6 +8600,38 @@ static const int NUM_SHOP_ITEMS		= sizeof( shopItems ) / sizeof( shopItems[ 0 ] 
 // Hover codes the GUI writes into gui::hover
 static const int HOVER_PLACE_BASE	= 1;	// place p   -> 1 + p
 static const int HOVER_SHOP_BASE	= 101;	// shop item -> 101 + index
+static const int HOVER_POWERUP_BASE	= 201;	// powerup card -> 201 + index
+
+/*
+===============================================================================
+
+  The powerups. One row per powerup, in shopPowerupType_t order:
+    name       shown on its card
+    effect     the line under the name
+    maxStacks  how many times it can be bought (0 = no limit)
+  What each one does is in the code: SecondaryFireMs (Fire Rate),
+  AddCash (Cash Bonus), GetSpeedScale (Speed), ModifyPlayerDamage
+  (Damage) and ApplyMaxHealth (Max Health).
+
+===============================================================================
+*/
+typedef struct {
+	const char *	name;
+	const char *	effect;
+	int				maxStacks;
+} shopPowerupInfo_t;
+
+static const shopPowerupInfo_t shopPowerups[ PW_NUM_TYPES ] = {
+	//	name			effect					maxStacks
+	{	"Fire Rate",	"secondaries -0.5s",	3	},	// 2 s -> 1.5 -> 1 -> 0.5
+	{	"Cash Bonus",	"+10% cash earned",		0	},
+	{	"Speed",		"+10% move speed",		0	},
+	{	"Damage",		"+10% damage dealt",	0	},
+	{	"Max Health",	"+10% max health",		0	},
+};
+
+static const int POWERUP_FIRE_RATE_MS	= 500;	// each Fire Rate: the secondaries fire this much sooner
+static const int POWERUP_PERCENT		= 10;	// each Cash Bonus, Speed, Damage or Max Health: +10%
 
 /*
 ================
@@ -8697,6 +8729,13 @@ void rvWaveManager::ClearState( void ) {
 	gunsBought		= 0;
 	held			= 0;
 	heldByClick		= false;
+
+	for ( int t = 0; t < PW_NUM_TYPES; t++ ) {
+		powerups[ t ] = 0;
+	}
+	for ( int i = 0; i < SHOP_POWERUP_CARDS; i++ ) {
+		powerupCards[ i ] = PW_NONE;
+	}
 }
 
 /*
@@ -8813,6 +8852,7 @@ void rvWaveManager::Reset( bool fromSaveGame ) {
 	} else {
 		// a new run starts in the shop, once the player has loaded in
 		pendingCash = startCash;
+		DealPowerupCards();
 		SetState( WAVESTATE_STARTSHOP, startDelay );
 	}
 
@@ -8871,10 +8911,10 @@ void rvWaveManager::Run( void ) {
 			break;
 
 		case WAVESTATE_COMBAT:
-			// the secondary guns fire by themselves every SECONDARY_FIRE_MS
+			// the secondary guns fire by themselves (every 2 s, sooner with Fire Rate)
 			if ( gameLocal.time >= nextSecondaryTime ) {
 				FireSecondaries( player );
-				nextSecondaryTime = gameLocal.time + SECONDARY_FIRE_MS;
+				nextSecondaryTime = gameLocal.time + SecondaryFireMs();
 			}
 			if ( toSpawn > 0 && gameLocal.time >= nextSpawnTime && monsters.Num() < maxAlive ) {
 				SpawnMonster( player );
@@ -8887,8 +8927,9 @@ void rvWaveManager::Run( void ) {
 					SetState( WAVESTATE_INACTIVE, 0 );
 					break;
 				}
-				AddCash( player, clearCash );
-				shopMessage = va( "Wave bonus: +$%d", clearCash );
+				int bonus = AddCash( player, clearCash );
+				shopMessage = va( "Wave bonus: +$%d", bonus );
+				DealPowerupCards();		// new powerup cards for the shop after this wave
 				SetState( WAVESTATE_CLEARED, WAVE_CLEARED_PAUSE_MS );
 			}
 			break;
@@ -8960,7 +9001,7 @@ void rvWaveManager::BeginWave( void ) {
 	}
 	spawnedThisWave = 0;
 	nextSpawnTime = gameLocal.time;
-	nextSecondaryTime = gameLocal.time + SECONDARY_FIRE_MS;	// first volley 2 seconds into the wave
+	nextSecondaryTime = gameLocal.time + SecondaryFireMs();	// first volley one interval into the wave
 	shopMessage.Clear();
 	SetState( WAVESTATE_COMBAT, 0 );
 	gameLocal.Printf( "WaveManager: wave %d, %d enemies%s\n", waveNumber, toSpawn, IsBossWave( waveNumber ) ? " (boss wave)" : "" );
@@ -9175,14 +9216,20 @@ int rvWaveManager::GetGunCost( void ) const {
 /*
 ================
 rvWaveManager::AddCash
+
+Everything the player earns (kills, bosses, wave bonuses) comes through
+here, so this is where the Cash Bonus powerup adds its +10% per stack.
+Returns what was actually added.
 ================
 */
-void rvWaveManager::AddCash( idPlayer *player, int amount ) {
+int rvWaveManager::AddCash( idPlayer *player, int amount ) {
+	amount += amount * PowerupPercent( PW_CASH ) / 100;
 	player->buyMenuCash = idMath::ClampFloat( 0.0f, (float)MAX_CASH, player->buyMenuCash + (float)amount );
 	Persist();
 	if ( IsShopOpen() ) {
 		UpdateShopGui( player );
 	}
+	return amount;
 }
 
 /*
@@ -9198,6 +9245,14 @@ For every place p (0 primary, 1-4 secondaries, 5-9 inventory):
 	gui::place<p>_type   shopWeaponType_t, for the box colour
 	gui::place<p>_held   1 while that gun is being dragged
 and for the dragged-gun label: gui::drag_active, gui::drag_name.
+The powerups:
+	gui::powerup_cost    e.g. "$1200", what every powerup costs right now
+	gui::powerup_status  0 can buy, 3 too expensive (powerup_cost turns red)
+and for every card c (0-2):
+	gui::pw<c>_visible   0 once its powerup is bought (the card disappears)
+	gui::pw<c>_name      "Damage"
+	gui::pw<c>_effect    "+10% damage dealt"
+	gui::pw<c>_have      "have 2", or "have 1 of 3" for one with a limit
 Then it fires the "shopUpdate" named event.
 ================
 */
@@ -9247,6 +9302,26 @@ void rvWaveManager::UpdateShopGui( idPlayer *player ) {
 	shopGui->SetStateBool( "drag_active", held != 0 );
 	shopGui->SetStateString( "drag_name", dragName );
 
+	// the powerup cards
+	int powerupCost = GetPowerupCost();
+	shopGui->SetStateString( "powerup_cost", va( "$%d", powerupCost ) );
+	shopGui->SetStateInt( "powerup_status", ( powerupCost > (int)player->buyMenuCash ) ? 3 : 0 );
+	for ( int i = 0; i < SHOP_POWERUP_CARDS; i++ ) {
+		int type = powerupCards[ i ];
+		shopGui->SetStateBool( va( "pw%d_visible", i ), type != PW_NONE );
+		if ( type == PW_NONE ) {
+			continue;
+		}
+		const shopPowerupInfo_t &info = shopPowerups[ type ];
+		shopGui->SetStateString( va( "pw%d_name", i ), info.name );
+		shopGui->SetStateString( va( "pw%d_effect", i ), info.effect );
+		if ( info.maxStacks > 0 ) {
+			shopGui->SetStateString( va( "pw%d_have", i ), va( "have %d of %d", powerups[ type ], info.maxStacks ) );
+		} else {
+			shopGui->SetStateString( va( "pw%d_have", i ), va( "have %d", powerups[ type ] ) );
+		}
+	}
+
 	shopGui->StateChanged( gameLocal.time );
 	shopGui->HandleNamedEvent( "shopUpdate" );
 }
@@ -9257,7 +9332,7 @@ rvWaveManager::PlaceFromHover / ShopItemFromHover
 
 guis/shop.gui writes a code into gui::hover whenever the mouse is over
 something: 1 + place for a weapon place, 101 + index for a shop item,
-0 for nothing.
+201 + index for a powerup card, 0 for nothing.
 ================
 */
 int rvWaveManager::PlaceFromHover( int hover ) const {
@@ -9268,6 +9343,11 @@ int rvWaveManager::PlaceFromHover( int hover ) const {
 int rvWaveManager::ShopItemFromHover( int hover ) const {
 	int item = hover - HOVER_SHOP_BASE;
 	return ( item >= 0 && item < NUM_SHOP_ITEMS ) ? item : -1;
+}
+
+int rvWaveManager::PowerupCardFromHover( int hover ) const {
+	int card = hover - HOVER_POWERUP_BASE;
+	return ( card >= 0 && card < SHOP_POWERUP_CARDS && powerupCards[ card ] != PW_NONE ) ? card : -1;
 }
 
 /*
@@ -9386,6 +9466,7 @@ Called by idPlayer::Weapon_GUI each time the fire button goes down or up
 while the shop is open. Works out drags and clicks from what the mouse
 was over (gui::hover):
 
+	press on a powerup card          buy it (powerups can't be dragged)
 	press on X, release on X        click: buy (shop item) or pick up (weapon)
 	press on X, release on Y        drag: drop X onto Y
 	picked up, then click on Y      drop onto Y (click on nothing to cancel)
@@ -9403,6 +9484,11 @@ void rvWaveManager::ShopMouseButton( bool down ) {
 	if ( down ) {
 		if ( held ) {
 			return;		// carrying something picked up with a click: act on the release
+		}
+		int card = PowerupCardFromHover( hover );
+		if ( card >= 0 ) {
+			FinishShopAction( player, BuyPowerup( player, card ) );
+			return;
 		}
 		bool canGrab = ( ShopItemFromHover( hover ) >= 0 ) || ( hoverPlace >= 0 && places[ hoverPlace ] != SW_NONE );
 		if ( canGrab ) {
@@ -9459,9 +9545,10 @@ void rvWaveManager::FinishShopAction( idPlayer *player, bool ok ) {
 ================
 rvWaveManager::PersistInventory / RestoreInventory
 
-Keeps the player's guns in worldspawn's spawnArgs ("shop_place0" = gun
-type, ...) so they survive save/load, like Persist() does for the wave
-state.
+Keeps the player's guns and powerups in worldspawn's spawnArgs
+("shop_place0" = gun type, "shop_powerup0" = how many Fire Rates,
+"shop_card0" = the first card's powerup, ...) so they survive save/load,
+like Persist() does for the wave state.
 ================
 */
 void rvWaveManager::PersistInventory( void ) {
@@ -9472,6 +9559,12 @@ void rvWaveManager::PersistInventory( void ) {
 		gameLocal.world->spawnArgs.SetInt( va( "shop_place%d", p ), places[ p ] );
 	}
 	gameLocal.world->spawnArgs.SetInt( "shop_guns_bought", gunsBought );
+	for ( int t = 0; t < PW_NUM_TYPES; t++ ) {
+		gameLocal.world->spawnArgs.SetInt( va( "shop_powerup%d", t ), powerups[ t ] );
+	}
+	for ( int i = 0; i < SHOP_POWERUP_CARDS; i++ ) {
+		gameLocal.world->spawnArgs.SetInt( va( "shop_card%d", i ), powerupCards[ i ] );
+	}
 }
 
 void rvWaveManager::RestoreInventory( void ) {
@@ -9483,6 +9576,17 @@ void rvWaveManager::RestoreInventory( void ) {
 		places[ p ] = ( gun > SW_NONE && gun < SW_NUM_TYPES ) ? gun : SW_NONE;
 	}
 	gunsBought = gameLocal.world->spawnArgs.GetInt( "shop_guns_bought", "0" );
+	for ( int t = 0; t < PW_NUM_TYPES; t++ ) {
+		int count = gameLocal.world->spawnArgs.GetInt( va( "shop_powerup%d", t ), "0" );
+		if ( shopPowerups[ t ].maxStacks > 0 && count > shopPowerups[ t ].maxStacks ) {
+			count = shopPowerups[ t ].maxStacks;
+		}
+		powerups[ t ] = ( count > 0 ) ? count : 0;
+	}
+	for ( int i = 0; i < SHOP_POWERUP_CARDS; i++ ) {
+		int type = gameLocal.world->spawnArgs.GetInt( va( "shop_card%d", i ), "-1" );
+		powerupCards[ i ] = ( type >= 0 && type < PW_NUM_TYPES ) ? type : PW_NONE;
+	}
 }
 
 /*
@@ -9528,7 +9632,7 @@ void rvWaveManager::ApplyLoadout( void ) {
 rvWaveManager::FireSecondaries
 
 Every secondary slot that holds a gun fires once, from the player's eyes,
-where the player is looking. Called every SECONDARY_FIRE_MS during a wave.
+where the player is looking. Called every SecondaryFireMs() during a wave.
 ================
 */
 void rvWaveManager::FireSecondaries( idPlayer *player ) {
@@ -9586,6 +9690,164 @@ void rvWaveManager::FireWeaponDef( idPlayer *player, const char *weaponName, con
 			ent->Damage( player, player, dir, weapon->GetString( "def_damage" ), SECONDARY_DAMAGE, 0 );
 		}
 	}
+}
+
+/*
+================
+rvWaveManager::GetPowerupCost
+
+Every powerup costs the same: powerup_cost_start, plus powerup_cost_step
+for each powerup bought so far this run. Both live in def/shop_prices.def.
+================
+*/
+int rvWaveManager::GetPowerupCost( void ) const {
+	const idDict *prices = gameLocal.FindEntityDefDict( "shop_prices", false );
+	int start	= prices ? prices->GetInt( "powerup_cost_start", "1000" ) : 1000;
+	int step	= prices ? prices->GetInt( "powerup_cost_step", "200" ) : 200;
+	int bought	= 0;
+	for ( int t = 0; t < PW_NUM_TYPES; t++ ) {
+		bought += powerups[ t ];
+	}
+	return start + step * bought;
+}
+
+/*
+================
+rvWaveManager::DealPowerupCards
+
+Puts a random powerup on every card, no two the same. A powerup that's
+been bought as many times as it can be (maxStacks) isn't dealt.
+Called at the start of a run and after every wave.
+================
+*/
+void rvWaveManager::DealPowerupCards( void ) {
+	int pool[ PW_NUM_TYPES ];		// the powerups that can still be bought
+	int poolSize = 0;
+	for ( int t = 0; t < PW_NUM_TYPES; t++ ) {
+		if ( shopPowerups[ t ].maxStacks == 0 || powerups[ t ] < shopPowerups[ t ].maxStacks ) {
+			pool[ poolSize++ ] = t;
+		}
+	}
+
+	for ( int i = 0; i < SHOP_POWERUP_CARDS; i++ ) {
+		if ( poolSize == 0 ) {
+			powerupCards[ i ] = PW_NONE;
+			continue;
+		}
+		int pick = gameLocal.random.RandomInt( poolSize );
+		powerupCards[ i ] = pool[ pick ];
+		pool[ pick ] = pool[ --poolSize ];	// take it out of the pool, so the next card is different
+	}
+	PersistInventory();
+}
+
+/*
+================
+rvWaveManager::BuyPowerup
+
+Buys the powerup on card 'card'. It works straight away, and the card
+stays empty until the cards are dealt again after the next wave.
+================
+*/
+bool rvWaveManager::BuyPowerup( idPlayer *player, int card ) {
+	if ( card < 0 || card >= SHOP_POWERUP_CARDS || powerupCards[ card ] == PW_NONE ) {
+		return false;
+	}
+	int type = powerupCards[ card ];
+	int price = GetPowerupCost();
+
+	if ( price > (int)player->buyMenuCash ) {
+		shopMessage = "Not enough money!";
+		return false;
+	}
+
+	player->buyMenuCash -= (float)price;
+	powerups[ type ]++;
+	powerupCards[ card ] = PW_NONE;		// its card disappears
+	if ( type == PW_HEALTH ) {
+		ApplyMaxHealth( player );
+	}
+	shopMessage = va( "Bought %s for $%d", shopPowerups[ type ].name, price );
+	PersistInventory();
+	Persist();
+	return true;
+}
+
+/*
+================
+rvWaveManager::PowerupPercent
+
+The bonus from one powerup, in percent: +10% for each one bought. The
+bonuses add up (3 Damage = +30%), they don't multiply.
+================
+*/
+int rvWaveManager::PowerupPercent( int type ) const {
+	return powerups[ type ] * POWERUP_PERCENT;
+}
+
+/*
+================
+rvWaveManager::SecondaryFireMs
+
+The Fire Rate powerup: 2 s between secondary volleys, 0.5 s less for
+each one bought. It can be bought 3 times, which makes it 0.5 s.
+================
+*/
+int rvWaveManager::SecondaryFireMs( void ) const {
+	return SECONDARY_FIRE_MS - powerups[ PW_FIRE_RATE ] * POWERUP_FIRE_RATE_MS;
+}
+
+/*
+================
+rvWaveManager::GetSpeedScale
+
+The Speed powerup. idPlayer::AdjustSpeed multiplies the player's walk
+and run speed by this.
+================
+*/
+float rvWaveManager::GetSpeedScale( void ) const {
+	return 1.0f + PowerupPercent( PW_SPEED ) / 100.0f;
+}
+
+/*
+================
+rvWaveManager::ModifyPlayerDamage
+
+The Damage powerup. Called from idPlayer::DamageFeedback every time the
+player (or one of their secondary guns) is about to damage an enemy;
+'damage' can still be changed there.
+================
+*/
+void rvWaveManager::ModifyPlayerDamage( idPlayer *player, idEntity *victim, int &damage ) {
+	if ( powerups[ PW_DAMAGE ] <= 0 || victim == player || damage <= 0 ) {
+		return;
+	}
+	// Damage is a whole number, so the leftover fraction becomes a chance
+	// of one more point: 4 damage +10% = 4.4, which is 5 damage 40% of the
+	// time. That way even weak hits get the full bonus on average.
+	int hundredths = damage * ( 100 + PowerupPercent( PW_DAMAGE ) );
+	damage = hundredths / 100;
+	if ( gameLocal.random.RandomInt( 100 ) < hundredths % 100 ) {
+		damage++;
+	}
+}
+
+/*
+================
+rvWaveManager::ApplyMaxHealth
+
+The Max Health powerup: the player def's max health, +10% for each one
+bought. The extra health comes filled in, so buying it also heals the
+player by that much.
+================
+*/
+void rvWaveManager::ApplyMaxHealth( idPlayer *player ) {
+	int base = player->spawnArgs.GetInt( "maxhealth", "100" );
+	int newMax = base + base * PowerupPercent( PW_HEALTH ) / 100;
+	if ( newMax > player->inventory.maxHealth ) {
+		player->health += newMax - player->inventory.maxHealth;
+	}
+	player->inventory.maxHealth = newMax;
 }
 
 /*
@@ -9715,6 +9977,20 @@ void rvWaveManager::StartNextWave( void ) {
 	}
 }
 
+void rvWaveManager::GiveCash( int amount ) {
+	idPlayer *player = gameLocal.GetLocalPlayer();
+	if ( !player ) {
+		return;
+	}
+	// not through AddCash, which would add the Cash Bonus on top
+	player->buyMenuCash = idMath::ClampFloat( 0.0f, (float)MAX_CASH, player->buyMenuCash + (float)amount );
+	Persist();
+	if ( IsShopOpen() ) {
+		UpdateShopGui( player );
+	}
+	gameLocal.Printf( "wave_givecash: you now have $%d\n", (int)player->buyMenuCash );
+}
+
 void rvWaveManager::PrintStatus( void ) const {
 	idPlayer *player = gameLocal.GetLocalPlayer();
 	gameLocal.Printf( "state:        %s\n", waveStateNames[ state ] );
@@ -9725,6 +10001,10 @@ void rvWaveManager::PrintStatus( void ) const {
 	gameLocal.Printf( "spawn points: %d\n", spawnOrigins.Num() );
 	gameLocal.Printf( "cash:         %d\n", player ? (int)player->buyMenuCash : 0 );
 	gameLocal.Printf( "gun cost:     %d (%d bought)\n", GetGunCost(), gunsBought );
+	gameLocal.Printf( "powerup cost: %d\n", GetPowerupCost() );
+	for ( int t = 0; t < PW_NUM_TYPES; t++ ) {
+		gameLocal.Printf( "  %-12s%d\n", shopPowerups[ t ].name, powerups[ t ] );
+	}
 	gameLocal.Printf( "shop gui:     %s\n", shopGui ? "loaded" : "missing" );
 }
 
@@ -9747,5 +10027,9 @@ void Cmd_WaveNext_f( const idCmdArgs &args ) {
 
 void Cmd_WaveStatus_f( const idCmdArgs &args ) {
 	waveManager.PrintStatus();
+}
+
+void Cmd_WaveGiveCash_f( const idCmdArgs &args ) {
+	waveManager.GiveCash( 50000 );
 }
 // WAVESHOP END

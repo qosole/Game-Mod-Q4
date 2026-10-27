@@ -8790,6 +8790,11 @@ void idPlayer::AdjustSpeed( void ) {
 
 	speed *= PowerUpModifier(PMOD_SPEED);
 
+// WAVESHOP BEGIN
+	// the Speed powerup
+	speed *= waveManager.GetSpeedScale();
+// WAVESHOP END
+
 	if ( influenceActive == INFLUENCE_LEVEL3 ) {
 		speed *= 0.33f;
 	}
@@ -13022,6 +13027,11 @@ void idPlayer::DamageFeedback( idEntity *victim, idEntity *inflictor, int &damag
 	if( !victim || ( !victim->IsType( idActor::GetClassType() ) && !victim->IsType( rvTramCar::GetClassType() ) ) || victim->health <= 0 ) {
 		return;
 	}
+
+// WAVESHOP BEGIN
+	// the Damage powerup
+	waveManager.ModifyPlayerDamage( this, victim, damage );
+// WAVESHOP END
 
 	bool armorHit = false;
 

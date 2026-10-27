@@ -3238,6 +3238,7 @@ void idGameLocal::InitConsoleCommands( void ) {
 	cmdSystem->AddCommand( "wave_killall",			Cmd_WaveKillAll_f,			CMD_FL_GAME,				"remove every wave enemy (testing)");
 	cmdSystem->AddCommand( "wave_next",				Cmd_WaveNext_f,				CMD_FL_GAME,				"start the next wave now (testing)");
 	cmdSystem->AddCommand( "wave_status",			Cmd_WaveStatus_f,			CMD_FL_GAME,				"print the wave manager state");
+	cmdSystem->AddCommand( "wave_givecash",			Cmd_WaveGiveCash_f,			CMD_FL_GAME,				"give the player $50000 (testing)");
 // WAVESHOP END
 
 }

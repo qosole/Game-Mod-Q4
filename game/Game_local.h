@@ -1444,7 +1444,8 @@ typedef enum {
 //
 // Every gun the player owns sits in one "place":
 //   place 0               the primary slot (the gun the player holds)
-//   places 1..4           the secondary slots (fire by themselves every 2 seconds)
+//   places 1..4           the secondary slots (fire by themselves every 2 seconds,
+//                         sooner with the Fire Rate powerup)
 //   places 5..9           the inventory (owned but not equipped)
 //----------------------------------------------------------------
 
@@ -1469,6 +1470,30 @@ const int SHOP_PLACE_PRIMARY			= 0;
 const int SHOP_PLACE_FIRST_SECONDARY	= 1;
 const int SHOP_PLACE_FIRST_LIST			= 1 + SHOP_SECONDARY_SLOTS;
 
+//----------------------------------------------------------------
+// Powerups
+//
+// The shop also has SHOP_POWERUP_CARDS cards, each showing a random
+// powerup (no two the same). The cards are dealt at the start of the
+// run and again after every wave. Buying a powerup removes its card,
+// and every powerup bought makes the next one cost more
+// (def/shop_prices.def). Powerups stack: buying one again adds its
+// bonus again. Each one is a row in the shopPowerups table (top of
+// the shop code).
+//----------------------------------------------------------------
+
+typedef enum {
+	PW_NONE = -1,		// an empty card (its powerup was bought)
+	PW_FIRE_RATE = 0,	// the secondary guns fire 0.5 s sooner (3 at most)
+	PW_CASH,			// +10% cash from kills, bosses and wave bonuses
+	PW_SPEED,			// +10% movement speed
+	PW_DAMAGE,			// +10% damage dealt
+	PW_HEALTH,			// +10% max health
+	PW_NUM_TYPES
+} shopPowerupType_t;
+
+const int SHOP_POWERUP_CARDS			= 3;	// must match guis/shop.gui
+
 class rvWaveManager {
 public:
 							rvWaveManager( void );
@@ -1490,10 +1515,16 @@ public:
 	// --- the player's guns (place 0 = primary, 1..4 = secondaries), as shopWeaponType_t ---
 	int						GetPlace( int place ) const { return places[ place ]; }
 
+	// --- powerup effects, called from Player.cpp ---
+	float					GetSpeedScale( void ) const;	// from idPlayer::AdjustSpeed (1.1 = 10% faster)
+	void					ModifyPlayerDamage( idPlayer *player, idEntity *victim, int &damage );	// from idPlayer::DamageFeedback
+	int						GetPowerupCount( int type ) const { return powerups[ type ]; }
+
 	// --- console commands / debugging ---
 	void					OpenShopNow( void );
 	void					KillAll( void );
 	void					StartNextWave( void );
+	void					GiveCash( int amount );		// straight to the player, without the Cash Bonus
 	void					PrintStatus( void ) const;
 
 private:
@@ -1508,7 +1539,7 @@ private:
 	void					OpenShop( void );
 	void					CloseShop( void );
 
-	void					AddCash( idPlayer *player, int amount );
+	int						AddCash( idPlayer *player, int amount );	// returns what was added (with the Cash Bonus)
 
 	void					UpdateShopGui( idPlayer *player );
 	void					UpdateHud( idPlayer *player );
@@ -1525,6 +1556,15 @@ private:
 	void					PersistInventory( void );
 	void					RestoreInventory( void );
 	void					ApplyLoadout( void );
+
+	// powerups
+	int						GetPowerupCost( void ) const;			// what any powerup costs right now
+	int						PowerupCardFromHover( int hover ) const;	// -1 if the code isn't a card that's still there
+	void					DealPowerupCards( void );				// a new random powerup on every card
+	bool					BuyPowerup( idPlayer *player, int card );
+	int						PowerupPercent( int type ) const;		// the bonus from that powerup, in percent
+	int						SecondaryFireMs( void ) const;			// time between secondary volleys
+	void					ApplyMaxHealth( idPlayer *player );
 
 	waveState_t				state;
 	waveState_t				returnState;		// where to go when the shop closes
@@ -1568,6 +1608,9 @@ private:
 	int						gunsBought;			// guns bought this run; raises the gun cost
 	int						held;				// hover code of what's being dragged/carried, 0 = nothing
 	bool					heldByClick;		// picked up with a click (put down with the next click)
+
+	int						powerups[ PW_NUM_TYPES ];			// how many of each powerup the player has bought
+	int						powerupCards[ SHOP_POWERUP_CARDS ];	// the powerup on each card, PW_NONE once it's bought
 };
 
 extern rvWaveManager		waveManager;
@@ -1577,6 +1620,7 @@ void Cmd_WaveShop_f( const idCmdArgs &args );
 void Cmd_WaveKillAll_f( const idCmdArgs &args );
 void Cmd_WaveNext_f( const idCmdArgs &args );
 void Cmd_WaveStatus_f( const idCmdArgs &args );
+void Cmd_WaveGiveCash_f( const idCmdArgs &args );
 // WAVESHOP END
 
 #endif	/* !__GAME_LOCAL_H__ */
