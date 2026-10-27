@@ -89,8 +89,8 @@ entityDef weapon_grenadelauncher
 	"weaponname"				"Grenade Launcher"
 	"def_projectile"			"projectile_grenade"
 	"ammoType"					"ammo_grenadelauncher"
-	"clipSize"					"0"
-	"ammoRequired"				"0"
+	"clipSize"					"0"		// WAVESHOP CHANGE: infinite ammo
+	"ammoRequired"				"0"		// WAVESHOP CHANGE: infinite ammo
 	"mtr_icon"					"gfx/guis/hud/icons/gun_grenadelauncher"
 
 	"ammoRegenStep"				"1"
@@ -296,7 +296,7 @@ entityDef projectile_grenade
 
 entityDef damage_grenadeDirect 
 {
-	"damage"					"125"
+	"damage"					"62"	// WAVESHOP CHANGE: subtracted 1, then halved
 	"gib"						"1"
 
 	"deathPush"					"200"
@@ -317,8 +317,8 @@ entityDef damage_grenadeDirect_mp
 
 entityDef damage_grenadeSplash 
 {
-	"damage"					"200"
-	"radius"					"250"
+	"damage"					"50"	// WAVESHOP CHANGE: divided damage by 4
+	"radius"					"750"	// WAVESHOP CHANGE: tripled explosion radius
 	"knockback"					"100"
 	"push"						"10000"
 	"gib"						"0"
