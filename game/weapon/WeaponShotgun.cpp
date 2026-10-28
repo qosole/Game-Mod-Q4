@@ -165,6 +165,10 @@ stateResult_t rvWeaponShotgun::State_Fire( const stateParms_t& parms ) {
 		case STAGE_INIT:
 			nextAttackTime = gameLocal.time + (fireRate * owner->PowerUpModifier ( PMOD_FIRERATE ));
 			Attack( false, hitscans, spread, 0, 1.0f );
+			// WAVESHOP BEGIN
+			// Give the player 20 armor on shot
+			owner->inventory.armor = idMath::ClampInt(0, owner->inventory.maxarmor * 2, owner->inventory.armor + 20);
+			// WAVESHOP END
 			PlayAnim( ANIMCHANNEL_ALL, "fire", 0 );	
 			return SRESULT_STAGE( STAGE_WAIT );
 	
