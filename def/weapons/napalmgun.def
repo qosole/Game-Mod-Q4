@@ -75,14 +75,14 @@ entityDef weapon_napalmgun
 
 	"fireRate"					".8"
 //	"reloadRate"				".1"
-	"spread"					"0"
+	"spread"					"45"		// WAVESHOP CHANGE: changed from 0 to 45
 	"dirOffset"					"0 0 .1"
 
 	"weaponname"				"Napalm Launcher"
 	"def_projectile"			"projectile_napalm"
 	"ammoType"					"ammo_napalmgun"
-	"clipSize"					"0"
-	"ammoRequired"				"0"
+	"clipSize"					"0"		// WAVESHOP CHANGE: infinite ammo
+	"ammoRequired"				"0"		// WAVESHOP CHANGE: infinite ammo
 	"gui"						"guis/weapons/napalmgun.gui"
 	"mtr_icon"					"gfx/guis/hud/icons/gun_napalmgun"
 
@@ -377,7 +377,7 @@ entityDef damage_napalmDirect
 entityDef damage_napalmSplash
 {
 	"damage"					"70"
-	"radius"					"140"
+	"radius"					"420"		// WAVESHOP CHANGE: tripled
 	"attackerDamageScale"		"1.0"
 	"knockback"					"60"
 	"gib"						"0"
@@ -389,7 +389,7 @@ entityDef damage_napalmSplash
 entityDef damage_napalmGlobEmit
 {
 	"damage"					"15"
-	"radius"					"140"
+	"radius"					"420"		// WAVESHOP CHANGE: tripled
 	"attackerDamageScale"		"1.0"
 	"knockback"					"0"
 	"gib"						"0"
