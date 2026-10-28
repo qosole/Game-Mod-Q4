@@ -78,8 +78,8 @@ entityDef weapon_hyperblaster
 	"crosshairOffsetX"			"0"
 	"crosshairOffsetY"			"0"
 
-	"fireRate"					".08"
-	"spread"					"2"
+	"fireRate"					".01"	// WAVESHOP CHANGE: changed from 0.08 to 0.01
+	"spread"					"0"		// WAVESHOP CHANGE: changed from 2 to 0
 	"spread_mp"					"0"
 
 	"inv_weapon"				"weapon_hyperblaster"
@@ -92,8 +92,8 @@ entityDef weapon_hyperblaster
 	"inv_start_ammo_hyperblaster"		"60"
 	"ammoRegenStep"				"5"
 	"ammoRegenTime"				"1500"
-	"clipSize"					"0"									// large for smooth regen
-	"ammoRequired"				"0"										// ammo is handled in the script file
+	"clipSize"					"0"									// large for smooth regen; WAVESHOP CHANGE: infinite amo
+	"ammoRequired"				"0"										// ammo is handled in the script file; WAVESHOP CHANGE: infinite ammo
 	"gui"						"guis/weapons/hyperblaster_ammo.gui"
 	"mtr_icon"					"gfx/guis/hud/icons/gun_hyperblaster"
 	
@@ -271,7 +271,7 @@ entityDef weaponmod_hyperblaster_bounce2
 entityDef damage_hyperblaster
 {
 	"inherit"					"damage_blaster"
-	"damage"					"14"
+	"damage"					"7"		// WAVESHOP CHANGE: halved damage
 
 	"deathPush"					"100"
 	"deathPushMin"				"3000 350"
@@ -286,7 +286,7 @@ entityDef damage_hyperblaster_mp
 
 entityDef damage_hyperblaster_splash
 {
-	"damage"					"10"
+	"damage"					"5"		// WAVESHOP CHANGE: halved damage
 	"radius"					"35"
 	"knockback"					"5"
 	"push"						"0"
@@ -312,7 +312,7 @@ entityDef projectile_hyperblaster
 	"clipmask_largeshot"		"0"
 	"def_damage"				"damage_hyperblaster"
 	
-	"speed"						"1800"
+	"speed"						"900"	// WAVESHOP CHANGE: halved speed
 	"orient_towards_motion"		"1"
 
 	"fx_impact"			"effects/weapons/hyperblaster/impact_default.fx"
