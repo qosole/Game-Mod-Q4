@@ -77,7 +77,7 @@ entityDef weapon_rocketlauncher
 
 	"fireRate"					".8"
 	"reloadRate"				".8"
-	"spread"					"0"
+	"spread"					"45"	// WAVESHOP CHANGE: changed from 0 to 45
 
 	"ammoRegenStep"				"1"
 	"ammoRegenTime"				"1750"
@@ -85,8 +85,8 @@ entityDef weapon_rocketlauncher
 	"weaponname"				"Rocket Launcher"
 	"def_projectile"			"projectile_rocket"
 	"ammoType"					"ammo_rocketlauncher"
-	"clipSize"					"0"
-	"ammoRequired"				"0"
+	"clipSize"					"0"		// WAVESHOP CHANGE: infinite ammo
+	"ammoRequired"				"0"		// WAVESHOP CHANGE: infinite ammo
 	"gui"						"guis/weapons/rocketlauncher_ammo.gui"
 	"mtr_icon"					"gfx/guis/hud/icons/gun_rocketlauncher"
 
@@ -330,7 +330,7 @@ entityDef projectile_rocket
 	"def_damage"				"damage_rocketDirect"
 	"def_splash_damage"			"damage_rocketSplash"
 																											
-	"speed"						"900"
+	"speed"						"450"	// WAVESHOP CHANGE: halved speed
 	"fuse"						"6"
 	"push"						"48000"
 	
@@ -414,7 +414,7 @@ entityDef damage_rocketDirect_mp
 entityDef damage_rocketSplash 
 {
 	"damage"					"150"
-	"radius"					"270"
+	"radius"					"540"	// WAVESHOP CHANGE: doubled radius
 	"knockback"					"100"
 	"push"						"10000"
 	"gib"						"0"

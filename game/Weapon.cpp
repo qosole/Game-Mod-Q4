@@ -2604,6 +2604,28 @@ void rvWeapon::Attack( bool altAttack, int num_attacks, float spread, float fuse
 	}
 }
 
+// WAVESHOP BEGIN
+/*
+================
+EvenSpreadDir
+
+The direction of projectile 'shot' (0 .. numShots - 1) of one attack. The
+shots fan out evenly from 'spread' degrees to one side to 'spread' degrees
+to the other, turning left/right only (never up or down):
+	1 shot     straight ahead, whatever the spread
+	3 shots    -spread, 0, +spread
+'axis' is the aim: axis[ 0 ] forward, axis[ 1 ] sideways.
+================
+*/
+static idVec3 EvenSpreadDir( const idMat3 &axis, int shot, int numShots, float spread ) {
+	if ( numShots <= 1 ) {
+		return axis[ 0 ];
+	}
+	float angle = DEG2RAD( spread ) * ( 2.0f * shot / ( numShots - 1 ) - 1.0f );	// -spread ... +spread
+	return axis[ 0 ] * idMath::Cos( angle ) + axis[ 1 ] * idMath::Sin( angle );
+}
+// WAVESHOP END
+
 /*
 ================
 rvWeapon::LaunchProjectiles
@@ -2655,6 +2677,10 @@ void rvWeapon::LaunchProjectiles ( idDict& dict, const idVec3& muzzleOrigin, con
 		dir += dirOffset;
 #endif
 //RAVEN END
+// WAVESHOP BEGIN
+		// replace the random spread above with an even, side-to-side fan
+		dir = EvenSpreadDir( playerViewAxis, i, num_projectiles, spread ) + dirOffset;
+// WAVESHOP END
 		dir.Normalize();
 	
 		// If a projectile entity has already been created then use that one, otherwise
