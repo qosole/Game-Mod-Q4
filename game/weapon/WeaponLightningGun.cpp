@@ -321,7 +321,10 @@ void rvWeaponLightningGun::Think ( void ) {
 		for ( i = 0; i < chainLightning.Num(); i ++, power *= 0.75f ) {
 			Attack ( chainLightning[i].target, chainLightning[i].normal, power );
 		}
-
+		// WAVESHOP BEGIN
+		// Give the player 1 armor per second
+		owner->inventory.armor = idMath::ClampInt(0, owner->inventory.maxarmor * 2, owner->inventory.armor + 1);
+		// WAVESHOP END
 		statManager->WeaponFired( owner, owner->GetCurrentWeapon(), chainLightning.Num() + 1 );
 	}
 

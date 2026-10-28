@@ -66,7 +66,7 @@ entityDef weapon_lightninggun
 
 	"fireRate"					".05"
 	"spread"					"1"
-	"range"						"1600"
+	"range"						"160"		// WAVESHOP CHANGE: reduced from 1600 to 160
 
 	"joint_attach"				"LG_ATTACHER"
   	"joint_view_flash"			"barrel"
@@ -83,8 +83,8 @@ entityDef weapon_lightninggun
 
 	"mtr_crosshair"				"gfx/guis/crosshairs/crosshair_lightninggun"
 	"ammoType"					"ammo_lightninggun"
-	"ammoRequired"				"0"
-	"clipSize"					"0"
+	"ammoRequired"				"0"		// WAVESHOP CHANGE: infinite ammo
+	"clipSize"					"0"		// WAVESHOP CHANGE: infinite ammo
 	"lowAmmo"					"10"
 	"mtr_icon"					"gfx/guis/hud/icons/gun_lightninggun"
 
